@@ -20,6 +20,7 @@ from typing import List, Dict, Optional
 
 from collector.utils.api import get_json, APIError
 from collector.utils.validators import valid_address
+from collector.utils.helpers import to_float
 
 logger = logging.getLogger(__name__)
 
@@ -108,4 +109,38 @@ class GMGNClient:
             "renounced": int(raw.get("is_renounced", 0) or 0),
             "open_source": int(raw.get("is_open_source", 0) or 0),
         })
+
+        # ==== Kernel akumulasi: derivasi dari data GMGN yang ada ====
+        smart = int(raw.get("smart_degen_count", 0) or 0)
+        renowned = int(raw.get("renowned_count", 0) or 0)
+        buys = int(raw.get("buys", 0) or 0)
+        sells = int(raw.get("sells", 0) or 0)
+        swaps = int(raw.get("swaps", 0) or 0)
+        price_1h = to_float(raw.get("price_change_percent1h"), raw.get("price_change_percent", 0.0))
+
+        # whale cluster -> smart_degen + renowned = smart wallets aktif
+        out["big_holder_count"] = smart if buys > 0 else 0
+        out["whale_count"] = smart
+
+        # buyer pattern: net flow riil dari tx GMGN
+        if buys > 0 and sells == 0:
+            out["buyer_pattern"] = "single_entry"
+        elif buys > sells * 1.3:
+            out["buyer_pattern"] = "cluster"
+        elif buys > sells:
+            out["buyer_pattern"] = "gradual"
+        elif swaps > 0:
+            out["buyer_pattern"] = "distributing"
+        else:
+            out["buyer_pattern"] = ""
+
+        # holder trend: akumulasi = smart wallet masuk + net-buy + harga belum meledak
+        if smart > 0 and buys >= sells and price_1h < 5.0:
+            out["holder_count_trend"] = "accumulation"
+        elif smart > 0:
+            out["holder_count_trend"] = "accumulating_watch"
+        else:
+            out["holder_count_trend"] = "neutral"
+
+        out["price_change_1h"] = price_1h
         return out

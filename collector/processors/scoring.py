@@ -32,10 +32,13 @@ class TokenScorer:
         breakdown: Dict[str, float] = {}
         w = self.WEIGHTS
 
-        # 1. Cluster whale (bobot 2x) — big_holder_count atau whale clusters
+        # 1. Cluster whale (bobot 2x) — HARUS ada konfirmasi flow beli nyata.
+        #    Feed disortir smart_degen_count desc: nilai absolut tidak membedakan;
+        #    kombinasi smart >= 50 DAN pola cluster/single-entry yang berbicara.
         whale_bonus = 0.0
         big_holders = to_float(token.get("big_holder_count"), to_float(token.get("whale_count"), 0.0))
-        if big_holders > 0:
+        pattern = str(token.get("buyer_pattern", "")).lower()
+        if big_holders >= 50 and pattern in ("cluster", "single_entry"):
             whale_bonus = min(20.0, 4.0 * big_holders) * w["cluster_whale"]
         score += whale_bonus
         breakdown["cluster_whale"] = whale_bonus
@@ -83,6 +86,23 @@ class TokenScorer:
         social_score = min(10.0, social * 2.0)
         breakdown["social_mention"] = social_score
         score += social_score
+
+        # 6. Size window (1.5 bobot tak tertulis, nilai inti meme trench)
+        #    Sweet-spot pre-pump biasanya MC 100k-3M. Sudah gede = belakangan, minus.
+        mcap = to_float(token.get("market_cap"), 0.0)
+        size_score = 0.0
+        if 100_000 <= mcap < 3_000_000:
+            size_score = 12.0
+        elif 3_000_000 <= mcap < 10_000_000:
+            size_score = 6.0
+        elif mcap >= 50_000_000:
+            size_score = -12.0
+        elif 10_000_000 <= mcap < 50_000_000:
+            size_score = -4.0
+        elif 0 < mcap < 100_000:
+            size_score = -4.0
+        breakdown["size_window"] = size_score
+        score += size_score
 
         return {
             "alpha": round(clamp(score), 1),
