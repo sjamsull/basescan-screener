@@ -31,7 +31,7 @@ class GoPlusClient:
             logger.error("GoPlus %s (%d): %s", address, chain_id, exc)
             return {**EMPTY_SECURITY, "error": str(exc)}
 
-        result = data.get("result", {}).get(address.lower(), {})
+        result = (data.get("result") or {}).get(address.lower(), {})
         if not result:
             return {**EMPTY_SECURITY, "error": "no security data returned"}
 

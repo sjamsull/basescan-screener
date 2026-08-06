@@ -35,7 +35,7 @@ class DeepDive:
         pair = self.dex.get_pair(chain_cfg.dexscreener_chain, addr)
         out["dexscreener"] = self.dex.extract(pair)
 
-        if security and not security.get("is_honeypot"):
+        if security and not security.get("is_honeypot") and chain_cfg.explorer_scan in ("etherscan", "basescan", "arbiscan", "bscscan"):
             explorer = self._explorer(chain_cfg.explorer_scan)
             buckets = explorer.same_second_buckets(addr, limit=40)
             out["same_second_flags"] = buckets
