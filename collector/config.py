@@ -13,17 +13,28 @@ class ChainConfig:
     goplus_id: int
     gecko_network: str
     dexscreener_chain: str
-    explorer_scan: str  # "etherscan" | "basescan" | dll
+    explorer_chainid: int  # None = explorer free tier tidak tersedia, di-skip
 
 
 CHAINS: Dict[str, ChainConfig] = {
-    "base": ChainConfig("Base", "base", 8453, "base", "base", "basescan"),
-    "robinhood": ChainConfig("Robinhood", "robinhood", 4663, "robinhood", "base", "basescan"),
-    "arbitrum": ChainConfig("Arbitrum", "arbitrum", 42161, "arbitrum", "arbitrum", "arbiscan"),
-    "eth": ChainConfig("Ethereum", "eth", 1, "ethereum", "ethereum", "etherscan"),
-    "bsc": ChainConfig("BSC", "bsc", 56, "bsc", "bsc", "bscscan"),
-    "sol": ChainConfig("Solana", "sol", 101, "solana", "solana", "solscan"),
+    "base": ChainConfig("Base", "base", 8453, "base", "base", 8453),
+    "robinhood": ChainConfig("Robinhood", "robinhood", 4663, "robinhood", "base", None),
+    "arbitrum": ChainConfig("Arbitrum", "arbitrum", 42161, "arbitrum", "arbitrum", 42161),
+    "eth": ChainConfig("Ethereum", "eth", 1, "ethereum", "ethereum", 1),
+    "bsc": ChainConfig("BSC", "bsc", 56, "bsc", "bsc", 56),
+    "sol": ChainConfig("Solana", "sol", 101, "solana", "solana", None),
 }
+
+# Explorer free tier (verified 2026): hanya chainid 1 (ETH) & 42161 (Arbitrum).
+# chainid 8453 (Base) & 56 (BSC) ditolak free tier — di-skip sampai plan di-upgrade.
+# Upgrade path: EXPLORER_CHAINIDS=1,42161,8453,56 untuk mengaktifkan chain lain.
+_supported = {1, 42161}
+_explorer_env = os.getenv("EXPLORER_CHAINIDS", "").strip()
+if _explorer_env:
+    _supported = {int(x.strip()) for x in _explorer_env.split(",") if x.strip()}
+for _cfg in CHAINS.values():
+    if _cfg.explorer_chainid not in _supported:
+        object.__setattr__(_cfg, "explorer_chainid", None)
 
 DEFAULT_CHAIN = os.getenv("DEFAULT_CHAIN", "base")
 

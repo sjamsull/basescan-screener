@@ -17,12 +17,6 @@ class DeepDive:
     def __init__(self):
         self.gecko = GeckoClient()
         self.dex = DexScreenerClient()
-        self.explorer_cache: Dict[str, ExplorerClient] = {}
-
-    def _explorer(self, scan: str) -> ExplorerClient:
-        if scan not in self.explorer_cache:
-            self.explorer_cache[scan] = ExplorerClient(scan)
-        return self.explorer_cache[scan]
 
     def enrich(self, token: Dict, chain_cfg, security: Dict) -> Dict:
         """Isi gecko_*, dexscreener_*, explorer_* ke dalam token. Tanpa throw."""
@@ -35,10 +29,13 @@ class DeepDive:
         pair = self.dex.get_pair(chain_cfg.dexscreener_chain, addr)
         out["dexscreener"] = self.dex.extract(pair)
 
-        if security and not security.get("is_honeypot") and chain_cfg.explorer_scan in ("etherscan", "basescan", "arbiscan", "bscscan"):
-            explorer = self._explorer(chain_cfg.explorer_scan)
+        if security and not security.get("is_honeypot") and chain_cfg.explorer_chainid:
+            explorer = ExplorerClient(chain_cfg.explorer_chainid)
             buckets = explorer.same_second_buckets(addr, limit=40)
             out["same_second_flags"] = buckets
+        else:
+            out["same_second_flags"] = []
+            out["explorer_skip"] = True if not chain_cfg.explorer_chainid else False
 
         # Fee/MC ratio — dari GMGN kalau ada, bukan tambahan API call
         mcap = token.get("market_cap") or (gecko.get("market_cap") or 0)

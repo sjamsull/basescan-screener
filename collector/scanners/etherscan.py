@@ -1,6 +1,8 @@
-"""Etherscan-compatible explorer — raw transactions untuk same-second wash-trade detection.
+"""Etherscan V2 terpadu — satu endpoint untuk semua chain, dengan chainid.
 
-Mendukung etherscan/basescan/arbiscan/bscscan. API key via ETHERSCAN_API_KEY.
+Free tier (per 2026): chainid=1 (ETH), 42161 (Arbitrum) terbuka.
+chainid=8453 (Base), 56 (BSC) ditolak free tier -> ExplorerClient tidak diinstansiasi
+untuk chain itu di pipeline (skip + catat), bukan spam error.
 """
 
 import os
@@ -12,20 +14,16 @@ from collector.utils.helpers import to_float
 
 logger = logging.getLogger(__name__)
 
+V2_URL = "https://api.etherscan.io/v2/api"
+
 
 class ExplorerClient:
-    def __init__(self, scan: str = "etherscan"):
+    def __init__(self, chainid: int):
         self.api_key = os.getenv("ETHERSCAN_API_KEY", "")
-        self.scan = scan
-        self.base = {
-            "etherscan": "https://api.etherscan.io/api",
-            "basescan": "https://api.basescan.org/api",
-            "arbiscan": "https://api.arbiscan.io/api",
-            "bscscan": "https://api.bscscan.com/api",
-        }[scan]
+        self.chainid = chainid
 
     def _params(self, **kw) -> dict:
-        return {"apikey": self.api_key, **kw}
+        return {"chainid": self.chainid, "apikey": self.api_key, **kw}
 
     def raw_tx(self, address: str, limit: int = 40) -> List[Dict]:
         """ERC-20 transfers terbaru. Dipakai untuk flag same-second."""
@@ -37,23 +35,20 @@ class ExplorerClient:
             offset=limit,
         )
         try:
-            data = get_json(self.base, params=params, timeout=20, retries=1)
+            data = get_json(V2_URL, params=params, timeout=20, retries=1)
         except Exception as exc:
-            logger.warning("Explorer %s raw_tx: %s", self.scan, exc)
+            logger.warning("Explorer v2 chainid=%s raw_tx: %s", self.chainid, exc)
             return []
         if data.get("status") != "1":
+            logger.warning("Explorer v2 chainid=%s non-ok: %s", self.chainid, str(data.get("result"))[:100])
             return []
         result = data.get("result", [])
         if not isinstance(result, list):
-            logger.warning("Explorer %s non-list result: %s", self.scan, result)
             return []
         return [r for r in result if isinstance(r, dict)]
 
     def same_second_buckets(self, address: str, limit: int = 40) -> List[Dict]:
-        """Kelompokkan tx dengan timestamp identik. Bot/wash signature = banyak tx 1 detik.
-
-        Kembalikan bucket dengan count >= 3 sebagai flag.
-        """
+        """Kelompokkan tx dengan timestamp identik. Bot/wash signature = banyak tx 1 detik."""
         txs = self.raw_tx(address, limit=limit)
         buckets: Dict[str, Dict] = {}
         for tx in txs:
