@@ -171,13 +171,13 @@ class BacktestTracker:
         try:
             a = datetime.fromisoformat(str(t0).replace("Z", "+00:00"))
             b = datetime.fromisoformat(str(t1).replace("Z", "+00:00"))
-            if a.tzinfo is None:
-                a = a.replace(tzinfo=timezone.utc)
-            if b.tzinfo is None:
-                b = b.replace(tzinfo=timezone.utc)
-            return max(0.0, (b - a).total_seconds() / 3600.0)
         except Exception:
             return 0.0
+        if a.tzinfo is None:
+            a = a.replace(tzinfo=timezone.utc)
+        if b.tzinfo is None:
+            b = b.replace(tzinfo=timezone.utc)
+        return (b - a).total_seconds() / 3600.0
 
     # ---------- orchestration ----------
 
@@ -329,12 +329,18 @@ class BacktestTracker:
         }
         # time-to-tp1: jarak signal_at -> tp1_at, hanya utk yg punya keduanya
         tt1 = []
+        tt1_anomalies = 0
         for r in rows:
             s, t = r.get("signal_at"), r.get("tp1_at")
             if s and t:
-                tt1.append(self._hours_between(s, t))
-        m["avg_time_to_tp1_h"] = round(statistics.mean(tt1), 1) if tt1 else None
+                h = self._hours_between(s, t)
+                if h >= 0:
+                    tt1.append(h)
+                else:
+                    tt1_anomalies += 1
+        m["avg_time_to_tp1_h"] = round(statistics.mean(tt1), 2) if tt1 else None
         m["n_time_to_tp1"] = len(tt1)
+        m["time_to_tp1_anomalies"] = tt1_anomalies
 
         # hit rate tp1 terhadap yang sudah 'resolved/moving' (sudah ada outcome atau tp1)
         denom = len(valuable)

@@ -52,7 +52,6 @@ class SupabaseStorage:
             raise
 
     def save_signal(self, rec: Dict) -> None:
-        """Insert/upsert sinyal untuk backtest tracking."""
         from collector.processors.plan import compact_plan
         prepared = {
             "plan": compact_plan(rec),
@@ -60,19 +59,32 @@ class SupabaseStorage:
             "risk_flags": rec.get("risk_flags"),
             "momentum": rec.get("momentum"),
         }
+        addr = rec.get("address", "")
         try:
-            self.client.table("signals").upsert({
-                "token_address": rec.get("address", ""),
-                "chain": rec.get("chain", ""),
-                "verdict": rec.get("verdict", ""),
-                "alpha": to_float(rec.get("alpha_score"), 0.0),
-                "risk": to_float(rec.get("risk_score"), 0.0),
-                "prepared_data": prepared,
-                "signal_at": datetime.now(timezone.utc).isoformat(),
-                "status": "ACTIVE",
-            }, on_conflict="token_address").execute()
+            existing = self.client.table("signals").select("signal_at").eq(
+                "token_address", addr
+            ).limit(1).execute()
+        except Exception:
+            existing = None
+
+        payload = {
+            "token_address": addr,
+            "chain": rec.get("chain", ""),
+            "verdict": rec.get("verdict", ""),
+            "alpha": to_float(rec.get("alpha_score"), 0.0),
+            "risk": to_float(rec.get("risk_score"), 0.0),
+            "prepared_data": prepared,
+        }
+        if not (existing and existing.data):
+            from datetime import datetime, timezone
+            payload["signal_at"] = datetime.now(timezone.utc).isoformat()
+
+        try:
+            self.client.table("signals").upsert(
+                payload, on_conflict="token_address"
+            ).execute()
         except Exception as exc:
-            logger.error("Supabase save_signal %s: %s", rec.get("address", "?"), exc)
+            logger.error("Supabase save_signal %s: %s", addr, exc)
 
     def log_reject(self, addr: str, chain: str, mode: str, reason: str) -> None:
         try:
