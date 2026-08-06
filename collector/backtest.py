@@ -299,11 +299,48 @@ class BacktestTracker:
             "tracked_ticks": tracked,
             "no_quote": no_quote,
             "states": states,
+            "metrics": self.aggregate_metrics(),
         }
         self.save_report(report)
         logger.info("Backtest tracker done: signals=%d tracked=%d no_quote=%d states=%s",
                     len(sigs), tracked, no_quote, states)
         return report
+
+    def aggregate_metrics(self) -> Dict:
+        """Metrik agregat dari signals yang sudah diverifikasi tracker (honest stats)."""
+        rows = self.storage.client.table("signals").select(
+            "token_address,chain,verdict,best_tp,tp1_at,tp2_at,tp3_at,signal_at,pnl_pct,status"
+        ).execute().data or []
+
+        # hanya sinyal dengan plan (punya tp_ladder) & data tracker
+        valuable = [r for r in rows
+                    if r.get("status") in ("COMPLETED", "INVALIDATED", "EXPIRED")
+                    or r.get("best_tp", 0) > 0 or r.get("tp1_at")]
+
+        resolved = [r for r in rows if r.get("status") in ("COMPLETED", "INVALIDATED", "EXPIRED")]
+        m = {
+            "evaluated": len(valuable),
+            "tp1_hits": sum(1 for r in rows if r.get("tp1_at")),
+            "tp2_hits": sum(1 for r in rows if r.get("tp2_at")),
+            "tp3_hits": sum(1 for r in rows if r.get("tp3_at")),
+            "invalidated": sum(1 for r in rows if r.get("status") == "INVALIDATED"),
+            "completed": sum(1 for r in rows if r.get("status") == "COMPLETED"),
+            "expired": sum(1 for r in rows if r.get("status") == "EXPIRED"),
+        }
+        # time-to-tp1: jarak signal_at -> tp1_at, hanya utk yg punya keduanya
+        tt1 = []
+        for r in rows:
+            s, t = r.get("signal_at"), r.get("tp1_at")
+            if s and t:
+                tt1.append(self._hours_between(s, t))
+        m["avg_time_to_tp1_h"] = round(statistics.mean(tt1), 1) if tt1 else None
+        m["n_time_to_tp1"] = len(tt1)
+
+        # hit rate tp1 terhadap yang sudah 'resolved/moving' (sudah ada outcome atau tp1)
+        denom = len(valuable)
+        m["tp1_hit_rate"] = round(m["tp1_hits"] / denom, 3) if denom else None
+        m["invalidation_rate"] = round(m["invalidated"] / denom, 3) if denom else None
+        return m
 
     @staticmethod
     def _same_hour(a: str, b) -> bool:
