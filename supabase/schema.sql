@@ -41,10 +41,39 @@ create table if not exists signals (
 create index if not exists signals_verdict_idx on signals (verdict);
 create index if not exists signals_at_idx on signals (signal_at desc);
 
+-- Backtest tracker: riwayat mcap per sinyal + hasil evaluasi.
+create table if not exists signal_tracks (
+  id bigint generated always as identity primary key,
+  token_address text not null,
+  chain text not null,
+  tracked_at timestamptz not null default now(),
+  mcap float8,
+  price float8,
+  liquidity float8
+);
+
+create index if not exists signal_tracks_token_idx on signal_tracks (token_address, tracked_at asc);
+
+create table if not exists backtest_reports (
+  id bigint generated always as identity primary key,
+  generated_at timestamptz not null default now(),
+  signals int not null default 0,
+  tracked_ticks int not null default 0,
+  no_quote int not null default 0,
+  states jsonb not null default '{}'::jsonb
+);
+
+alter table signals add column if not exists best_tp int not null default 0;
+alter table signals add column if not exists tp1_at timestamptz;
+alter table signals add column if not exists tp2_at timestamptz;
+alter table signals add column if not exists tp3_at timestamptz;
+
 -- RLS: dashboard baca dengan anon key; tulis service_role (bypass RLS).
 alter table scans enable row level security;
 alter table reject_log enable row level security;
 alter table signals enable row level security;
+alter table signal_tracks enable row level security;
+alter table backtest_reports enable row level security;
 
 drop policy if exists scans_read on scans;
 create policy scans_read on scans for select using (true);
@@ -54,3 +83,9 @@ create policy reject_log_read on reject_log for select using (true);
 
 drop policy if exists signals_read on signals;
 create policy signals_read on signals for select using (true);
+
+drop policy if exists signal_tracks_read on signal_tracks;
+create policy signal_tracks_read on signal_tracks for select using (true);
+
+drop policy if exists backtest_reports_read on backtest_reports;
+create policy backtest_reports_read on backtest_reports for select using (true);

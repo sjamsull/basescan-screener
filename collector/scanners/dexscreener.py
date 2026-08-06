@@ -59,6 +59,8 @@ class DexScreenerClient:
         return {
             "error": None,
             "price_usd": to_float(pair.get("priceUsd"), 0.0),
+            "market_cap": to_float(pair.get("marketCap"), 0.0),
+            "fdv": to_float(pair.get("fdv"), 0.0),
             "liquidity_usd": liquidity_usd,
             "volume_24h": volume_24h,
             "txns_24h": txns_24h,
