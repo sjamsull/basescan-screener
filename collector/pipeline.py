@@ -86,8 +86,8 @@ class TokenPipeline:
         return summary
 
     def _gate(self, token: Dict) -> Dict:
-        screener = Screener(self.chain_mode(token))
-        return screener.gate(token)
+        from collector.processors.security import SecurityGate
+        return SecurityGate(self.chain_mode(token)).check(token, pair=None)
 
     @staticmethod
     def chain_mode(token: Dict) -> str:

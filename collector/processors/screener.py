@@ -67,6 +67,3 @@ class Screener:
             "risk": risk_result["score"],
             "verdict": verdict,
         }
-
-    def gate(self, token: Dict, pair: Optional[Dict] = None) -> Dict:
-        return SecurityGate(self.mode).check(token, pair)

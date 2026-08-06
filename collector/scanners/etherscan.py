@@ -37,7 +37,7 @@ class ExplorerClient:
             offset=limit,
         )
         try:
-            data = get_json(self.base, params=params, timeout=30)
+            data = get_json(self.base, params=params, timeout=20, retries=1)
         except Exception as exc:
             logger.warning("Explorer %s raw_tx: %s", self.scan, exc)
             return []

@@ -15,13 +15,13 @@ class GeckoClient:
         self.base_url = "https://api.coingecko.com/api/v3"
 
     def _headers(self) -> dict:
-        return {"x-cg-pro-api-key": self.api_key} if self.api_key else {}
+        return {"x_cg_demo_api_key": self.api_key} if self.api_key else {}
 
     def price_volume(self, address: str, network: str) -> Dict:
         """Likuiditas & volume independen utk cross-check GMGN."""
         url = f"{self.base_url}/coins/{network}/contract/{address}"
         try:
-            data = get_json(url, headers=self._headers(), timeout=30)
+            data = get_json(url, headers=self._headers(), timeout=20, retries=1)
         except APIError as exc:
             logger.warning("Gecko %s: %s", address, exc)
             return {"error": str(exc)}

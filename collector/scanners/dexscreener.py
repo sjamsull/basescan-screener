@@ -15,7 +15,7 @@ class DexScreenerClient:
     def get_pair(self, chain: str, address: str) -> Optional[Dict]:
         url = f"{self.BASE_URL}/tokens/{address}"
         try:
-            data = get_json(url, timeout=20)
+            data = get_json(url, timeout=20, retries=1)
         except Exception as exc:
             logger.warning("DexScreener %s: %s", address, exc)
             return None
