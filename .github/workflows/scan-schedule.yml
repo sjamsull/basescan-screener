@@ -28,6 +28,5 @@ jobs:
           COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          CHAIN_WEIGHT_ORDER: ${{ vars.CHAIN_WEIGHT_ORDER }}
         run: |
           python -m collector.main --limit 50

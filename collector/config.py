@@ -29,7 +29,9 @@ DEFAULT_CHAIN = os.getenv("DEFAULT_CHAIN", "base")
 
 
 def chain_order() -> List[str]:
-    order = os.getenv("CHAIN_WEIGHT_ORDER", "base,eth,sol,bsc,robinhood")
+    order = os.getenv("CHAIN_WEIGHT_ORDER", "").strip()
+    if not order:
+        order = "base,eth,sol,bsc,robinhood"
     return [c.strip() for c in order.split(",") if c.strip() in CHAINS]
 
 
