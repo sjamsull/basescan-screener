@@ -15,6 +15,7 @@ from collector.processors.security import SecurityGate
 from collector.processors.deepdive import DeepDive
 from collector.processors.risk import RiskEngine
 from collector.processors.scoring import TokenScorer
+from collector.processors.plan import build_plan
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,9 @@ class Screener:
         verdict = self.scorer.get_verdict(scoring["alpha"], risk_result["score"])
         enriched["verdict"] = verdict
 
+        plan = build_plan(enriched, verdict, risk_result["score"])
+        enriched["plan"] = plan
+
         return {
             "token": enriched,
             "status": "PASSED",
@@ -66,4 +70,5 @@ class Screener:
             "alpha": scoring["alpha"],
             "risk": risk_result["score"],
             "verdict": verdict,
+            "plan": plan,
         }

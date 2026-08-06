@@ -53,6 +53,13 @@ class SupabaseStorage:
 
     def save_signal(self, rec: Dict) -> None:
         """Insert/upsert sinyal untuk backtest tracking."""
+        from collector.processors.plan import compact_plan
+        prepared = {
+            "plan": compact_plan(rec),
+            "alpha_breakdown": rec.get("alpha_breakdown"),
+            "risk_flags": rec.get("risk_flags"),
+            "momentum": rec.get("momentum"),
+        }
         try:
             self.client.table("signals").upsert({
                 "token_address": rec.get("address", ""),
@@ -60,6 +67,7 @@ class SupabaseStorage:
                 "verdict": rec.get("verdict", ""),
                 "alpha": to_float(rec.get("alpha_score"), 0.0),
                 "risk": to_float(rec.get("risk_score"), 0.0),
+                "prepared_data": prepared,
                 "signal_at": datetime.now(timezone.utc).isoformat(),
                 "status": "ACTIVE",
             }, on_conflict="token_address").execute()

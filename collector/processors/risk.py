@@ -58,8 +58,76 @@ class RiskEngine:
             flags.append("liq<100k")
 
         risk += self._wash_trade_penalty(token, flags)
+        risk += self._launchpad_structure_penalty(token, flags)
 
         return {"score": round(min(100.0, risk), 1), "flags": flags}
+
+    def _launchpad_structure_penalty(self, token: Dict, flags: list[str]) -> float:
+        """Risk struktur on-chain dari GMGN: bundler, trap ratio, dev-hold, sniper, creator.
+
+        Kalibrasi berbasis distribusi nyata feed GMGN (Aug 2026):
+        - Base: bundler_rate selalu 0 -> hanya aktif di Solana.
+        - entrapment_ratio median 0.84 di Base -> hanya ekor atas yang menandakan jebakan.
+        - creator_close 87% dari feed = normal trench -> +5, bukan pembunuh.
+        """
+        penalty = 0.0
+
+        # 1. Bundler rate (0-1): hanya terisi di Solana. >=0.35 mulai berbahaya.
+        bundler = to_float(token.get("bundler_rate"), 0.0)
+        if bundler >= 0.65:
+            penalty += 40
+            flags.append(f"bundler={bundler:.0%}")
+        elif bundler >= 0.5:
+            penalty += 28
+            flags.append(f"bundler={bundler:.0%}")
+        elif bundler >= 0.35:
+            penalty += 16
+            flags.append(f"bundler={bundler:.0%}")
+
+        # 2. Entrapment ratio: ekor atas saja (median feed ~0.84 di EVM).
+        entrapment = to_float(token.get("entrapment_ratio"), 0.0)
+        if entrapment >= 0.97:
+            penalty += 28
+            flags.append(f"entrapment={entrapment:.0%}")
+        elif entrapment >= 0.92:
+            penalty += 18
+            flags.append(f"entrapment={entrapment:.0%}")
+        elif entrapment >= 0.87:
+            penalty += 10
+            flags.append(f"entrapment={entrapment:.0%}")
+
+        # 3. Dev team hold rate: dev masih pegang besar = siap dump.
+        dev = token.get("dev_team_hold_rate")
+        if dev is not None and dev >= 0.25:
+            penalty += 20
+            flags.append(f"dev_hold={dev:.0%}")
+
+        # 4. Top-70 sniper hold: sniper pegang besar = menunggu dump ke run price.
+        sniper = token.get("top70_insider_hold_rate")
+        if sniper is None:
+            sniper = token.get("top70_sniper_hold_rate")
+        if sniper is not None and sniper >= 0.3:
+            penalty += 15
+            flags.append(f"sniper_hold={sniper:.0%}")
+
+        # 5. Rug ratio: extreme tail.
+        rug = to_float(token.get("rug_ratio"), 0.0)
+        if rug >= 0.75:
+            penalty += 30
+            flags.append(f"rug_ratio={rug:.0%}")
+
+        # 6. Creator sudah keluar: normal trench, flag ringan saja.
+        if token.get("creator_close"):
+            penalty += 5
+            flags.append("creator_close")
+
+        # 7. Creator sudah pindahtransfer besar (rug drive kuat tanpa score besar).
+        creator_sell = to_float(token.get("creator_sell", 0), 0.0)
+        if creator_sell >= 0.5:
+            penalty += 15
+            flags.append("creator_sold_large")
+
+        return penalty
 
     def _wash_trade_penalty(self, token: Dict, flags: list[str]) -> float:
         penalty = 0.0
