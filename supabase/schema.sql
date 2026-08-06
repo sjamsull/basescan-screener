@@ -60,7 +60,8 @@ create table if not exists backtest_reports (
   signals int not null default 0,
   tracked_ticks int not null default 0,
   no_quote int not null default 0,
-  states jsonb not null default '{}'::jsonb
+  states jsonb not null default '{}'::jsonb,
+  metrics jsonb not null default '{}'::jsonb
 );
 
 alter table signals add column if not exists best_tp int not null default 0;
