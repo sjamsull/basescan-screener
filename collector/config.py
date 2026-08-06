@@ -71,6 +71,7 @@ GMGN_API_KEY = os.getenv("GMGN_API_KEY", "")
 ETHERSCAN_API_KEY = os.getenv("ETHERSCAN_API_KEY", "")
 GOPLUS_API_KEY = os.getenv("GOPLUS_API_KEY", "")
 COINGECKO_API_KEY = os.getenv("COINGECKO_API_KEY", "")
+BLOCKSCOUT_API_KEY = os.getenv("BLOCKSCOUT_API_KEY", "")
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
@@ -80,6 +81,20 @@ DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
 # ==== MODE AKTIF ====
 ENABLE_MODE_ACCUMULATION = os.getenv("ENABLE_MODE_ACCUMULATION", "true").lower() == "true"
 ENABLE_MODE_DEADWHALE = os.getenv("ENABLE_MODE_DEADWHALE", "true").lower() == "true"
+
+
+# ==== DEAD-WHALE DETECTION (Tahap 1) ====
+# Definisi whale: wallet dengan balance native besar yang beli token mati.
+DW_WHALE_BALANCE_USD = float(os.getenv("DW_WHALE_BALANCE_USD", "10000"))   # saldo native wallet >= $10k
+DW_MIN_BUY_USD = float(os.getenv("DW_MIN_BUY_USD", "100"))                  # buy per tx >= $100
+DW_MIN_TOKEN_AGE_DAYS = int(os.getenv("DW_MIN_TOKEN_AGE_DAYS", "30"))      # token umur >= 30 hari
+DW_MAX_PRICE_RISE_12H = float(os.getenv("DW_MAX_PRICE_RISE_12H", "10"))     # max naik 10% dalam 12h
+DW_MAX_PRICE_RISE_36H = float(os.getenv("DW_MAX_PRICE_RISE_36H", "20"))     # max naik 20% dalam 36h
+DW_MAX_VOLUME_MULTIPLIER = float(os.getenv("DW_MAX_VOLUME_MULTIPLIER", "3"))  # volume < 3x avg 7d
+DW_CONFIRMATION_WINDOW_H = float(os.getenv("DW_CONFIRMATION_WINDOW_H", "18"))  # window 2+ whale
+DW_LOOKBACK_DAYS = int(os.getenv("DW_LOOKBACK_DAYS", "30"))                     # lihat beli 30 hari ke belakang
+DW_HOLD_MIN_DAYS = int(os.getenv("DW_HOLD_MIN_DAYS", "3"))                  # hold >= 3 hari = confirm
+DW_SCAN_LIMIT = int(os.getenv("DW_SCAN_LIMIT", "50"))                       # token per run
 
 
 def active_modes() -> List[str]:

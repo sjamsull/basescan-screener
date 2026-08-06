@@ -69,12 +69,60 @@ alter table signals add column if not exists tp1_at timestamptz;
 alter table signals add column if not exists tp2_at timestamptz;
 alter table signals add column if not exists tp3_at timestamptz;
 
+-- Dead-whale detection: posisi whale per token (ledger state utk deteksi beli cicil/hold).
+create table if not exists dead_token_universe (
+  token_address text primary key,
+  chain text not null,
+  symbol text,
+  name text,
+  decimals int not null default 18,
+  total_supply text,
+  holders int not null default 0,
+  created_at timestamptz,
+  volume_24h float8 not null default 0,
+  market_cap float8 not null default 0,
+  first_seen timestamptz not null default now(),
+  last_seen timestamptz not null default now()
+);
+
+create index if not exists dead_universe_chain_idx on dead_token_universe (chain, last_seen desc);
+
+create table if not exists whale_positions (
+  id bigint generated always as identity primary key,
+  token_address text not null,
+  chain text not null,
+  wallet text not null,
+  first_buy_at timestamptz,
+  last_buy_at timestamptz,
+  buy_count int not null default 0,
+  sell_count int not null default 0,
+  net_position float8 not null default 0,
+  total_buy float8 not null default 0,
+  total_sell float8 not null default 0,
+  buy_usd float8 not null default 0,
+  sell_usd float8 not null default 0,
+  hold_days float8 not null default 0,
+  last_balance_raw text,
+  last_balance_usd float8,
+  wallet_balance_usd float8 not null default 0,
+  is_contract boolean not null default false,
+  is_scam boolean not null default false,
+  status text not null default 'WATCH',  -- WATCH / CONFIRM / SIGNAL / DUMPED
+  updated_at timestamptz not null default now(),
+  unique (token_address, wallet)
+);
+
+create index if not exists whale_positions_token_idx on whale_positions (token_address, status);
+create index if not exists whale_positions_wallet_idx on whale_positions (wallet);
+
 -- RLS: dashboard baca dengan anon key; tulis service_role (bypass RLS).
 alter table scans enable row level security;
 alter table reject_log enable row level security;
 alter table signals enable row level security;
 alter table signal_tracks enable row level security;
 alter table backtest_reports enable row level security;
+alter table dead_token_universe enable row level security;
+alter table whale_positions enable row level security;
 
 drop policy if exists scans_read on scans;
 create policy scans_read on scans for select using (true);
@@ -90,3 +138,9 @@ create policy signal_tracks_read on signal_tracks for select using (true);
 
 drop policy if exists backtest_reports_read on backtest_reports;
 create policy backtest_reports_read on backtest_reports for select using (true);
+
+drop policy if exists dead_universe_read on dead_token_universe;
+create policy dead_universe_read on dead_token_universe for select using (true);
+
+drop policy if exists whale_positions_read on whale_positions;
+create policy whale_positions_read on whale_positions for select using (true);
