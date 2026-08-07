@@ -82,6 +82,7 @@ create table if not exists dead_token_universe (
   volume_24h float8 not null default 0,
   market_cap float8 not null default 0,
   risk_flags text,
+  security_json text,  -- GMGN /v1/token/security (top10, rug, tax, honeypot, flags) sebagai JSON mini
   first_seen timestamptz not null default now(),
   last_seen timestamptz not null default now()
 );

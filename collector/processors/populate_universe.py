@@ -4,6 +4,7 @@ volume 24h rendah) dari signals yang sudah ada di Supabase.
 Output: baris di dead_token_universe yang dipakai DeadWhaleScanner.load_universe.
 """
 
+import json
 import logging
 import os
 from datetime import datetime, timezone
@@ -74,13 +75,18 @@ class UniversePopulator:
         return False
 
     def _ensure_schema(self):
-        """Cek kolom risk_flags ada (perlu migration di Supabase SQL Editor)."""
+        """Cek kolom risk_flags & security_json ada (perlu migration di Supabase SQL Editor)."""
         try:
             self.store.client.table("dead_token_universe").select("risk_flags").limit(1).execute()
         except Exception:
             logger.error("Kolom risk_flags BELUM ada di dead_token_universe — jalankan di Supabase SQL Editor:\n"
                          'ALTER TABLE dead_token_universe ADD COLUMN IF NOT EXISTS risk_flags text;\n'
                          'Untuk membuatnya otomatis, isi .env SUPABASE_SERVICE_KEY yang punya akses DDL.')
+        try:
+            self.store.client.table("dead_token_universe").select("security_json").limit(1).execute()
+        except Exception:
+            logger.error("Kolom security_json BELUM ada di dead_token_universe — jalankan di Supabase SQL Editor:\n"
+                         'ALTER TABLE dead_token_universe ADD COLUMN IF NOT EXISTS security_json text;\n')
 
     def _enrich(self, addr: str):
         """Isi field yang Dune tidak sediakan (holders, market_cap, exchange_rate)."""
@@ -98,12 +104,12 @@ class UniversePopulator:
         }
 
     def _gmgn_gate(self, addr: str):
-        """GMGN security gate — return (ok: bool, flags: list[str])."""
+        """GMGN security gate — return (ok: bool, flags: list[str], sec: dict)."""
         try:
             sec = self.gmgn.token_security(addr)
         except Exception as exc:
             logger.debug("GMGN gate %s skip-call: %s", addr, exc)
-            return True, []
+            return True, [], {}
         flags: list[str] = []
         if sec.get("is_honeypot") and config.DW_GMGN_SKIP_HONEYPOT:
             flags.append("honeypot")
@@ -120,7 +126,7 @@ class UniversePopulator:
         tax = max(float(sec.get("buy_tax") or 0.0), float(sec.get("sell_tax") or 0.0))
         if tax > config.DW_GMGN_MAX_TAX:
             flags.append(f"tax={tax:.0%}")
-        return (not flags), flags
+        return (not flags), flags, sec
 
     def run(self, limit: int = 50, use_dune: bool = True) -> int:
         now = datetime.now(timezone.utc)
@@ -170,7 +176,7 @@ class UniversePopulator:
                 if vol > config.DW_DEAD_VOLUME_USD or holders <= 100 or mcap <= 0 or er <= 0:
                     continue
                 # GMGN risk gate: buang honeypot/rug/alert/top10-konsentrasi
-                ok_gate, flags = self._gmgn_gate(addr)
+                ok_gate, flags, gsec = self._gmgn_gate(addr)
                 record = {
                     "token_address": addr,
                     "chain": self.chain,
@@ -181,6 +187,7 @@ class UniversePopulator:
                     "volume_24h": vol,
                     "holders": holders,
                     "last_seen": now.isoformat(),
+                    "security_json": json.dumps(gsec, ensure_ascii=False, default=str) if gsec else None,
                 }
                 if ok_gate:
                     record["risk_flags"] = None
