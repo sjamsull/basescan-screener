@@ -285,7 +285,51 @@ class BlockscoutClient:
         except Exception:
             return 0.0
 
-    # ---------- token metadata ----------
+     # ---------- token list (universe sourcing) ----------
+
+    def list_tokens(self, chain: str, pages: int = 5, page_size: int = 100) -> List[Dict]:
+        """List token di sebuah chain (instance-level v2 /api/v2/tokens).
+
+        Return list dict {address, symbol, name, decimals, total_supply,
+        holders, volume_24h, market_cap, exchange_rate}.
+        `pages` = berapa page pertama yang discan (untuk populate universe).
+        """
+        mode, base = CHAIN_ENDPOINTS.get(chain, ("instance", "https://base.blockscout.com"))
+        if mode == "pro":
+            return []
+        out: List[Dict] = []
+        next_params: Optional[Dict] = None
+        for _ in range(max(1, pages)):
+            url = f"{base}/api/v2/tokens?items_count={min(page_size, 50)}"
+            if next_params:
+                sep = "?"
+                for k, v in next_params.items():
+                    url += f"{sep}{k}={v}"
+                    sep = "&"
+            try:
+                data = get_json(url, timeout=30, retries=1)
+            except Exception as exc:
+                logger.warning("Blockscout list_tokens %s: %s", chain, exc)
+                break
+            items = data.get("items") or []
+            for t in items:
+                out.append({
+                    "address": (t.get("address_hash") or "").lower(),
+                    "symbol": t.get("symbol"),
+                    "name": t.get("name"),
+                    "decimals": to_int(t.get("decimals"), 18),
+                    "total_supply": str(t.get("total_supply") or 0),
+                    "holders": to_int(t.get("holders_count"), 0),
+                    "volume_24h": to_float(t.get("volume_24h"), 0.0),
+                    "market_cap": to_float(t.get("circulating_market_cap"), 0.0),
+                    "exchange_rate": to_float(t.get("exchange_rate"), 0.0),
+                })
+            next_params = data.get("next_page_params")
+            if not next_params or len(items) < page_size:
+                break
+            time.sleep(0.4)
+        return out
+
 
     def token_info(self, chain: str, address: str) -> Optional[Dict]:
         """Metadata token (symbol, decimals, supply, holders)."""

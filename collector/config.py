@@ -89,6 +89,8 @@ DW_WHALE_BALANCE_USD = float(os.getenv("DW_WHALE_BALANCE_USD", "10000"))   # sal
 DW_MIN_BUY_USD = float(os.getenv("DW_MIN_BUY_USD", "100"))                  # buy per tx >= $100
 DW_MIN_TOKEN_AGE_DAYS = int(os.getenv("DW_MIN_TOKEN_AGE_DAYS", "30"))      # token umur >= 30 hari
 DW_DEAD_TXNS_THRESHOLD = int(os.getenv("DW_DEAD_TXNS_THRESHOLD", "5"))   # txns 24h <= 5 = dead
+DW_DEAD_VOLUME_USD = float(os.getenv("DW_DEAD_VOLUME_USD", "1000"))      # volume 24h <= USD 1000 = dead
+DW_UNIVERSE_PAGES = int(os.getenv("DW_UNIVERSE_PAGES", "8"))             # halaman /api/v2/tokens discan (50/token)
 DW_MAX_PRICE_RISE_12H = float(os.getenv("DW_MAX_PRICE_RISE_12H", "10"))     # max naik 10% dalam 12h
 DW_MAX_PRICE_RISE_36H = float(os.getenv("DW_MAX_PRICE_RISE_36H", "20"))     # max naik 20% dalam 36h
 DW_MAX_VOLUME_MULTIPLIER = float(os.getenv("DW_MAX_VOLUME_MULTIPLIER", "3"))  # volume < 3x avg 7d
