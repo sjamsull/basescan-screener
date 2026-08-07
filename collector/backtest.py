@@ -192,6 +192,62 @@ class BacktestTracker:
 
     # ---------- orchestration ----------
 
+    def _apply_state(self, addr: str, sim: Dict, states: Dict) -> None:
+        """Terapkan state hasil simulate ke tabel signals (dipakai run & reconcile).
+
+        Reconcile perlu me-reset status: sinyal yang sebelumnya INVALIDATED tapi
+        sim-based perjalanan masih hidup (RUNNING/TP1) harus kembali ke ACTIVE."""
+        state = sim.get("state", "NO_DATA")
+        states[state] = states.get(state, 0) + 1
+        best_tp = sim.get("best_tp", 0)
+        if best_tp >= 3 or (best_tp >= 2 and state.startswith("TP1") and sim.get("pnl") is not None):
+            self.update_signal(addr, {
+                "status": "COMPLETED",
+                "best_tp": best_tp,
+                "pnl_pct": sim.get("pnl"),
+                "tp1_at": (sim.get("tp_at") or {}).get(1),
+                "tp2_at": (sim.get("tp_at") or {}).get(2),
+                "tp3_at": (sim.get("tp_at") or {}).get(3),
+                "note": f"ladder done best_tp={best_tp} pnl={sim.get('pnl')}%",
+            })
+        elif state == "INVALIDATED":
+            self.update_signal(addr, {
+                "status": "INVALIDATED",
+                "pnl_pct": sim.get("pnl"),
+                "exit_price": sim.get("entry") * (1.0 + sim.get("pnl", 0.0) / 100.0)
+                if sim.get("entry") else None,
+                "note": f"invalidation breach pnl={sim.get('pnl')}%",
+            })
+        elif state.startswith("TP1"):
+            tp_at = sim.get("tp_at") or {}
+            self.update_signal(addr, {
+                "status": "ACTIVE",
+                "best_tp": sim.get("best_tp", 1),
+                "tp1_at": tp_at.get(1),
+                "tp2_at": tp_at.get(2),
+                "tp3_at": tp_at.get(3),
+                "note": f"tp1 hit t={sim.get('time_to_tp1')}h pnl(eval)={sim.get('pnl')}%",
+            })
+        elif state == "RUNNING":
+            fields = {}
+            if sim.get("time_to_tp1") is not None:
+                fields["tp1_at"] = (sim.get("tp_at") or {}).get(1)
+            if sim.get("best_tp", 0) > 0:
+                fields["best_tp"] = sim.get("best_tp")
+                fields["note"] = f"tp hit best={sim.get('best_tp')} (reconcile)"
+            self.update_signal(addr, {"status": "ACTIVE", **fields})
+
+    def _is_expired(self, sig: Dict) -> bool:
+        """True bila sinyal > TRACK_WINDOW_DAYS tanpa tp1 (boleh di-expire)."""
+        cutoff = datetime.now(timezone.utc) - timedelta(days=TRACK_WINDOW_DAYS)
+        try:
+            sig_ts = datetime.fromisoformat(str(sig.get("signal_at")).replace("Z", "+00:00"))
+            if sig_ts.tzinfo is None:
+                sig_ts = sig_ts.replace(tzinfo=timezone.utc)
+        except Exception:
+            return False
+        return sig_ts < cutoff
+
     def track(self, chain: str, sig: Dict) -> Dict:
         """Satu sinyal: ambil quote -> simpan track (bila belum ada utk jam ini)."""
         addr = sig.get("token_address", "")
@@ -253,40 +309,7 @@ class BacktestTracker:
                 .execute()
             )
             sim = self.simulate(rows.data or [], plan)
-            state = sim.get("state", "NO_DATA")
-            states[state] = states.get(state, 0) + 1
-            best_tp = sim.get("best_tp", 0)
-            # ladder tuntas: TP3 penuh, atau TP2 lalu breach invalidation -> closed
-            if best_tp >= 3 or (best_tp >= 2 and state.startswith("TP1") and sim.get("pnl") is not None):
-                self.update_signal(addr, {
-                    "status": "COMPLETED",
-                    "best_tp": best_tp,
-                    "pnl_pct": sim.get("pnl"),
-                    "tp1_at": (sim.get("tp_at") or {}).get(1),
-                    "tp2_at": (sim.get("tp_at") or {}).get(2),
-                    "tp3_at": (sim.get("tp_at") or {}).get(3),
-                    "note": f"ladder done best_tp={best_tp} pnl={sim.get('pnl')}%",
-                })
-            # update status di signals hanya bila final (INVALIDATED / selesai / EXPIRED)
-            elif state == "INVALIDATED":
-                self.update_signal(addr, {
-                    "status": "INVALIDATED",
-                    "pnl_pct": sim.get("pnl"),
-                    "exit_price": sim.get("entry") * (1.0 + sim.get("pnl", 0.0) / 100.0)
-                    if sim.get("entry") else None,
-                    "note": f"invalidation breach pnl={sim.get('pnl')}%",
-                })
-            elif state.startswith("TP1"):
-                tp_at = sim.get("tp_at") or {}
-                self.update_signal(addr, {
-                    "best_tp": sim.get("best_tp", 1),
-                    "tp1_at": tp_at.get(1),
-                    "tp2_at": tp_at.get(2),
-                    "tp3_at": tp_at.get(3),
-                    "note": f"tp1 hit t={sim.get('time_to_tp1')}h pnl(eval)={sim.get('pnl')}%",
-                })
-            elif state == "RUNNING" and sim.get("time_to_tp1") is not None:
-                self.update_signal(addr, {"tp1_at": (sim.get("tp_at") or {}).get(1)})
+            self._apply_state(addr, sim, states)
 
         # 3) Expire sinyal tua (>TRACK_WINDOW_DAYS) yang tak pernah tp1
         cutoff = datetime.now(timezone.utc) - timedelta(days=TRACK_WINDOW_DAYS)
@@ -315,6 +338,78 @@ class BacktestTracker:
         self.save_report(report)
         logger.info("Backtest tracker done: signals=%d tracked=%d no_quote=%d states=%s",
                     len(sigs), tracked, no_quote, states)
+        return report
+
+    def reconcile(self, limit: int = 0) -> Dict:
+        """Re-evaluasi SEMUA sinyal (bukan hanya ACTIVE) dengan logika terbaru.
+
+        Koreksi status historis yang ditulis sebelum fix baseline (mis. INVALIDATED
+        palsu akibat baseline track-pertama). Tidak menambah track baru; hanya
+        mengulang simulasi dari riwayat track yang ada.
+        """
+        resp = (
+            self.storage.client.table("signals")
+            .select("*")
+            .order("signal_at", desc=True)
+            .execute()
+        )
+        all_rows = resp.data or []
+        if limit:
+            all_rows = all_rows[:limit]
+
+        states: Dict[str, int] = {}
+        corrected = 0
+        no_plan = 0
+        no_tracks = 0
+
+        for sig in all_rows:
+            addr = sig["token_address"]
+            plan = self._plan_levels(sig)
+            if not plan:
+                no_plan += 1
+                continue
+            rows = (
+                self.storage.client.table("signal_tracks")
+                .select("*")
+                .eq("token_address", addr)
+                .order("tracked_at")
+                .execute()
+            )
+            tracks = rows.data or []
+            if not tracks:
+                no_tracks += 1
+                continue
+            sim = self.simulate(tracks, plan)
+            old_status = sig.get("status")
+            self._apply_state(addr, sim, states)
+            new_status = self.storage.client.table("signals").select("status").eq(
+                "token_address", addr
+            ).execute().data or []
+            if new_status and new_status[0].get("status") != old_status:
+                corrected += 1
+
+        # Expire sinyal tua yang masih ACTIVE dan tak pernah tp1
+        for sig in all_rows:
+            if sig.get("status") == "ACTIVE" and self._is_expired(sig):
+                self.update_signal(sig["token_address"], {
+                    "status": "EXPIRED",
+                    "note": f"no tp1 within {TRACK_WINDOW_DAYS}d window (reconciled)",
+                })
+                states["EXPIRED"] = states.get("EXPIRED", 0) + 1
+                corrected += 1
+
+        report = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "signals": len(all_rows),
+            "tracked_ticks": 0,
+            "no_quote": 0,
+            "states": {**states, "reconciled_corrected": corrected,
+                       "no_plan": no_plan, "no_tracks": no_tracks},
+            "metrics": self.aggregate_metrics(),
+        }
+        self.save_report(report)
+        logger.info("Reconcile done: signals=%d corrected=%d states=%s",
+                    len(all_rows), corrected, states)
         return report
 
     def aggregate_metrics(self) -> Dict:
@@ -380,13 +475,22 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(prog="collector.backtest")
     ap.add_argument("--limit", type=int, default=500)
     ap.add_argument("--all", action="store_true", help="proses semua (default)")
+    ap.add_argument("--reconcile", action="store_true",
+                    help="re-evaluasi SEMUA sinyal historis & koreksi status (tanpa track baru)")
     args = ap.parse_args(argv)
+
+    tr = BacktestTracker()
+
+    if args.reconcile:
+        kw = {"limit": 0 if args.all else args.limit}
+        report = tr.reconcile(**kw)
+        report_print(report)
+        return 0
 
     kw = {}
     if not args.all:
         kw["limit"] = args.limit
 
-    tr = BacktestTracker()
     report = tr.run(**kw)
     report_print(report)
     return 0
