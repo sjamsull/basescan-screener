@@ -118,7 +118,7 @@ const ago = (ts) => {
   return d?d+"d":(h?h+"h":" "+m+"m");
 };
 const pill = (s) => `<span class="pill ${s}">${s||'WATCH'}</span>`;
-const gmgn = (a) => a ? `https://gmgn.ai/token/${a}?chain=base` : "#";
+const gmgn = (a) => a ? `https://gmgn.ai/base/token/${a.toLowerCase()}` : "#";
 const arkm = (a) => a ? `https://arkm.com/explorer/address/${a}` : "#";
 
 function renderWhales(rows){
