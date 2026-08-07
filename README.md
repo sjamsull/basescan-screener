@@ -16,7 +16,8 @@ collector/  (pipeline Python)
   └── main.py        CLI entry
         │
         ▼
-Supabase (persisten)  ──►  api/ (FastAPI)  ──►  dashboard/ (Next.js, optional)
+Supabase (persisten)  ──►  whale_dashboard.html   (dashboard dead-whale interaktif, tanpa server)
+                          └─►  api/ (FastAPI, optional)
 ```
 
 ## Install lokal
