@@ -200,6 +200,7 @@ class BacktestTracker:
         state = sim.get("state", "NO_DATA")
         states[state] = states.get(state, 0) + 1
         best_tp = sim.get("best_tp", 0)
+        tt1 = sim.get("time_to_tp1")
         if best_tp >= 3 or (best_tp >= 2 and state.startswith("TP1") and sim.get("pnl") is not None):
             self.update_signal(addr, {
                 "status": "COMPLETED",
@@ -208,6 +209,7 @@ class BacktestTracker:
                 "tp1_at": (sim.get("tp_at") or {}).get(1),
                 "tp2_at": (sim.get("tp_at") or {}).get(2),
                 "tp3_at": (sim.get("tp_at") or {}).get(3),
+                "time_to_tp1_h": tt1,
                 "note": f"ladder done best_tp={best_tp} pnl={sim.get('pnl')}%",
             })
         elif state == "INVALIDATED":
@@ -216,6 +218,7 @@ class BacktestTracker:
                 "pnl_pct": sim.get("pnl"),
                 "exit_price": sim.get("entry") * (1.0 + sim.get("pnl", 0.0) / 100.0)
                 if sim.get("entry") else None,
+                "time_to_tp1_h": tt1,
                 "note": f"invalidation breach pnl={sim.get('pnl')}%",
             })
         elif state.startswith("TP1"):
@@ -226,7 +229,8 @@ class BacktestTracker:
                 "tp1_at": tp_at.get(1),
                 "tp2_at": tp_at.get(2),
                 "tp3_at": tp_at.get(3),
-                "note": f"tp1 hit t={sim.get('time_to_tp1')}h pnl(eval)={sim.get('pnl')}%",
+                "time_to_tp1_h": tt1,
+                "note": f"tp1 hit t={tt1}h pnl(eval)={sim.get('pnl')}%",
             })
         elif state == "RUNNING":
             fields = {}
@@ -235,7 +239,7 @@ class BacktestTracker:
             if sim.get("best_tp", 0) > 0:
                 fields["best_tp"] = sim.get("best_tp")
                 fields["note"] = f"tp hit best={sim.get('best_tp')} (reconcile)"
-            self.update_signal(addr, {"status": "ACTIVE", **fields})
+            self.update_signal(addr, {"status": "ACTIVE", "time_to_tp1_h": tt1, **fields})
 
     def _is_expired(self, sig: Dict) -> bool:
         """True bila sinyal > TRACK_WINDOW_DAYS tanpa tp1 (boleh di-expire)."""
@@ -398,12 +402,39 @@ class BacktestTracker:
                 states["EXPIRED"] = states.get("EXPIRED", 0) + 1
                 corrected += 1
 
+        # Backfill time_to_tp1_h untuk sinyal ber-tp1 yang kolomnya kosong (mis.
+        # yang plan-nya sudah ditimpa scan baru sehingga tidak lewat jalur simulate).
+        backfilled = 0
+        for sig in all_rows:
+            addr = sig["token_address"]
+            if sig.get("time_to_tp1_h") is not None:
+                continue
+            tp1 = sig.get("tp1_at")
+            if not tp1:
+                continue
+            rows = (
+                self.storage.client.table("signal_tracks")
+                .select("tracked_at, mcap")
+                .eq("token_address", addr)
+                .order("tracked_at")
+                .execute()
+            )
+            tracks = rows.data or []
+            if not tracks:
+                continue
+            first_ts = tracks[0].get("tracked_at")
+            h = self._hours_between(first_ts, tp1)
+            if h is not None and h >= 0:
+                self.update_signal(addr, {"time_to_tp1_h": round(h, 2)})
+                backfilled += 1
+
         report = {
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "signals": len(all_rows),
             "tracked_ticks": 0,
             "no_quote": 0,
             "states": {**states, "reconciled_corrected": corrected,
+                       "backfilled_tt1": backfilled,
                        "no_plan": no_plan, "no_tracks": no_tracks},
             "metrics": self.aggregate_metrics(),
         }
@@ -415,7 +446,7 @@ class BacktestTracker:
     def aggregate_metrics(self) -> Dict:
         """Metrik agregat dari signals yang sudah diverifikasi tracker (honest stats)."""
         rows = self.storage.client.table("signals").select(
-            "token_address,chain,verdict,best_tp,tp1_at,tp2_at,tp3_at,signal_at,pnl_pct,status"
+            "token_address,chain,verdict,best_tp,tp1_at,tp2_at,tp3_at,signal_at,pnl_pct,status,time_to_tp1_h"
         ).execute().data or []
 
         # hanya sinyal dengan plan (punya tp_ladder) & data tracker
@@ -433,10 +464,18 @@ class BacktestTracker:
             "completed": sum(1 for r in rows if r.get("status") == "COMPLETED"),
             "expired": sum(1 for r in rows if r.get("status") == "EXPIRED"),
         }
-        # time-to-tp1: jarak signal_at -> tp1_at, hanya utk yg punya keduanya
+        # time-to-tp1: prioritas kolom time_to_tp1_h (ditulis simulate, konsisten),
+        # fallback hitung ulang hanya untuk baris lama yang belum punya kolom.
         tt1 = []
         tt1_anomalies = 0
         for r in rows:
+            h = to_float(r.get("time_to_tp1_h"), None)
+            if h is not None:
+                if h >= 0:
+                    tt1.append(h)
+                else:
+                    tt1_anomalies += 1
+                continue
             s, t = r.get("signal_at"), r.get("tp1_at")
             if s and t:
                 h = self._hours_between(s, t)

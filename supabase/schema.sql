@@ -68,6 +68,7 @@ alter table signals add column if not exists best_tp int not null default 0;
 alter table signals add column if not exists tp1_at timestamptz;
 alter table signals add column if not exists tp2_at timestamptz;
 alter table signals add column if not exists tp3_at timestamptz;
+alter table signals add column if not exists time_to_tp1_h float8;  -- ditulis backtest (baseline track pertama, konsisten dengan simulate)
 
 -- Dead-whale detection: posisi whale per token (ledger state utk deteksi beli cicil/hold).
 create table if not exists dead_token_universe (
