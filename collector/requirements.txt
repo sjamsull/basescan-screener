@@ -1,4 +1,5 @@
 requests>=2.31.0
 python-dotenv>=1.0.0
 supabase>=2.0.0
-tenacity>=8.2.3dune-client>=1.10.0
+tenacity>=8.2.3
+dune-client>=1.10.0
