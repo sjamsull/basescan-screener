@@ -37,6 +37,8 @@ class UniversePopulator:
             holders = int(t.get("holders") or 0)
             mcap = float(t.get("market_cap") or 0.0)
             er = float(t.get("exchange_rate") or 0.0)
+            if self._exclude(t.get("symbol"), t.get("name")):
+                continue
             is_dead = (vol <= config.DW_DEAD_VOLUME_USD) and holders > 100 and mcap > 0 and er > 0
             if not is_dead:
                 continue
@@ -56,6 +58,18 @@ class UniversePopulator:
         """Fallback: token yang sudah ada di signals (Supabase)."""
         rows = self.store.client.table("signals").select("token_address,chain").eq("chain", self.chain).order("signal_at", desc=True).limit(limit).execute()
         return [{"token_address": r.get("token_address", "")} for r in (rows.data or [])]
+
+    def _exclude(self, symbol, name) -> bool:
+        """Buang stable/wrapped/major & nama scam dari universe."""
+        sym = (symbol or "").upper()
+        nm = (name or "").upper()
+        for p in config.DW_EXCLUDE_SYMBOL_PARTS:
+            if p and p.upper() in sym:
+                return True
+        for p in config.DW_EXCLUDE_NAME_PARTS:
+            if p and p.upper() in nm:
+                return True
+        return False
 
     def _enrich(self, addr: str):
         """Isi field yang Dune tidak sediakan (holders, market_cap, exchange_rate)."""
@@ -79,6 +93,7 @@ class UniversePopulator:
             try:
                 from collector.scanners.dune import run_query
                 rows = run_query(int(os.getenv("DUNE_DEAD_TOKENS_QUERY_ID")), os.getenv("DUNE_API_KEY"))
+                # Dune hanya suplai daftar alamat; simbol/name di-enrich nanti di loop
                 candidates += rows
             except Exception as exc:
                 logger.warning("Dune universe fetch: %s", exc)
@@ -109,6 +124,10 @@ class UniversePopulator:
                         holders = enr["holders"]
                         mcap = enr["market_cap"]
                         er = enr["exchange_rate"]
+                if self._exclude(c.get("symbol"), c.get("name")):
+                    continue
+                if mcap > config.DW_MAX_MARKET_CAP_USD:
+                    continue
                 # is_dead: volume rendah + holder cukup + token valid (exchange_rate>0 & mcap>0)
                 if vol > config.DW_DEAD_VOLUME_USD or holders <= 100 or mcap <= 0 or er <= 0:
                     continue

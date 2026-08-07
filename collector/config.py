@@ -99,6 +99,17 @@ DW_LOOKBACK_DAYS = int(os.getenv("DW_LOOKBACK_DAYS", "30"))                     
 DW_HOLD_MIN_DAYS = int(os.getenv("DW_HOLD_MIN_DAYS", "3"))                  # hold >= 3 hari = confirm
 DW_SCAN_LIMIT = int(os.getenv("DW_SCAN_LIMIT", "50"))                       # token per run
 
+# ==== FILTER UNIVERSE: buang token non-meme & scam dari screening ====
+# Simbol/pattern yang dikecualikan (uppercase). Default: stablecoin, wrapped/liquid
+# staking, dan token "tetangga" BTC/ETH/USD besar yang bukan meme.
+DW_EXCLUDE_SYMBOL_PARTS = os.getenv("DW_EXCLUDE_SYMBOL_PARTS",
+    "USD,USDT,USDC,DAI,WETH,WBTC,STETH,WSTETH,CBETH,RSETH,WRSETH,RBTC,CBTC,RETH,ETHBTC,XSOLVBTC,ACBETH,CLBTC,CGUSD,STAKED,WRAP,STEAK,MTBILL,TBILL").split(",")
+# Subsring pada nama/simbol yang menandakan spam/phishing (lowercase).
+DW_EXCLUDE_NAME_PARTS = os.getenv("DW_EXCLUDE_NAME_PARTS",
+    "phish,scam,airdrop,claim,free,btc20,mint,giveaway").split(",")
+# Token di luar batas market-cap ini dianggap "mayor"/non-meme (skip).
+DW_MAX_MARKET_CAP_USD = float(os.getenv("DW_MAX_MARKET_CAP_USD", "30000000"))  # $30M max = token kecil/meme
+
 
 def active_modes() -> List[str]:
     modes: List[str] = []
