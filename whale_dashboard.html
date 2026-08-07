@@ -53,6 +53,10 @@
   .close{alignign:right;color:var(--muted);cursor:pointer;font-size:18px}
   footer{margin-top:24px;color:var(--muted);font-size:11px;text-align:center}
   a{color:var(--blue);text-decoration:none}
+  .chainbar{display:flex;gap:8px;margin-bottom:12px}
+  .chainbtn{font-family:var(--mono);font-size:.78rem;letter-spacing:1px;padding:8px 20px;
+    border:1px solid var(--border-hot);border-radius:4px;background:var(--surface);color:var(--muted);cursor:pointer}
+  .chainbtn.active{background:var(--green);border-color:var(--green);color:#04110c;font-weight:700}
   .blink{animation:blink 1.4s steps(4,start) infinite}
   @keyframes blink{to{opacity:.35}}
   @media(max-width:760px){body{font-size:13px}.stats{grid-template-columns:1fr 1fr}}
@@ -65,6 +69,10 @@
   <div class="sub">Base • akumulasi diam-diam di token mati · <span id="last">loading…</span></div>
 </header>
 <div class="wrap">
+  <div class="chainbar">
+    <button class="chainbtn active" id="cbase">BASE</button>
+    <button class="chainbtn" id="crobinhood">ROBINHOOD</button>
+  </div>
   <div class="stats">
     <div class="stat"><div class="v" id="s-signals">–</div><div class="l">Sinyal (status)</div></div>
     <div class="stat"><div class="v" id="s-whales">–</div><div class="l">Whale wallet</div></div>
@@ -97,7 +105,7 @@
 </div>
 
 <footer>
-  Base • Dead-Whale v1 • scan tiap 6 jam via GitHub Actions
+  Base &amp; Robinhood • Dead-Whale v1 • scan tiap 6 jam via GitHub Actions
   · <a href="https://github.com/sjamsull/basescan-screener" target="_blank">repo</a>
 </footer>
 
@@ -172,8 +180,8 @@ async function openToken(addr){
   m.querySelector('#m-body').innerHTML='<div class="empty">Memuat…</div>';
   try{
     const [uni, pos] = await Promise.all([
-      q('dead_token_universe', {select:'*', token_address: `eq.${addr}`}),
-      q('whale_positions', {select:'*', token_address: `eq.${addr}`})
+      q('dead_token_universe', {select:'*', token_address: `eq.${addr}`, chain: `eq.${CUR}`}),
+      q('whale_positions', {select:'*', token_address: `eq.${addr}`, chain: `eq.${CUR}`})
     ]);
     const u = uni[0] || {};
     let posHtml='';
@@ -206,9 +214,19 @@ document.getElementById('twhales').onclick=()=>setTab('t-whales');
 document.getElementById('tuniverse').onclick=()=>setTab('t-universe');
 window.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
 
+let CUR = 'base';
+function setChain(name){
+  CUR = name;
+  document.querySelectorAll('.chainbtn').forEach(b=>b.classList.toggle('active', b.id==='c'+name));
+  load();
+}
+document.getElementById('cbase').onclick=()=>setChain('base');
+document.getElementById('crobinhood').onclick=()=>setChain('robinhood');
+
 async function load(){
   try{
-    const [w,u]=await Promise.allSettled([q('whale_positions',{order:'last_buy_at.desc',limit:'20'}), q('dead_token_universe',{order:'last_seen.desc',limit:'20'})]);
+    const ch={chain:`eq.${CUR}`};
+    const [w,u]=await Promise.allSettled([q('whale_positions',{...ch,order:'last_buy_at.desc',limit:'20'}), q('dead_token_universe',{...ch,order:'last_seen.desc',limit:'20'})]);
     const wr=w.status==='fulfilled'?w.value:[];
     const ur=u.status==='fulfilled'?u.value:[];
     renderWhales(wr); renderUniverse(ur);
