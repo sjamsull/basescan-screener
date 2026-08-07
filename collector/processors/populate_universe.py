@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 
 from collector import config
 from collector.scanners.blockscout import BlockscoutClient
+from collector.scanners.gmgn import GMGNClient
 from collector.storage.supabase import SupabaseStorage
 
 logger = logging.getLogger(__name__)
@@ -19,6 +20,7 @@ class UniversePopulator:
     def __init__(self, chain: str = "base"):
         self.chain = chain
         self.bs = BlockscoutClient()
+        self.gmgn = GMGNClient(chain)
         self.store = SupabaseStorage() if SupabaseStorage.configured() else None
         if self.store is None:
             raise RuntimeError("SUPABASE_URL / SUPABASE_SERVICE_KEY diperlukan")
@@ -71,6 +73,15 @@ class UniversePopulator:
                 return True
         return False
 
+    def _ensure_schema(self):
+        """Cek kolom risk_flags ada (perlu migration di Supabase SQL Editor)."""
+        try:
+            self.store.client.table("dead_token_universe").select("risk_flags").limit(1).execute()
+        except Exception:
+            logger.error("Kolom risk_flags BELUM ada di dead_token_universe — jalankan di Supabase SQL Editor:\n"
+                         'ALTER TABLE dead_token_universe ADD COLUMN IF NOT EXISTS risk_flags text;\n'
+                         'Untuk membuatnya otomatis, isi .env SUPABASE_SERVICE_KEY yang punya akses DDL.')
+
     def _enrich(self, addr: str):
         """Isi field yang Dune tidak sediakan (holders, market_cap, exchange_rate)."""
         info = self.bs.token_info(self.chain, addr)
@@ -86,8 +97,34 @@ class UniversePopulator:
             "exchange_rate": float(info.get("exchange_rate") or 0.0),
         }
 
+    def _gmgn_gate(self, addr: str):
+        """GMGN security gate — return (ok: bool, flags: list[str])."""
+        try:
+            sec = self.gmgn.token_security(addr)
+        except Exception as exc:
+            logger.debug("GMGN gate %s skip-call: %s", addr, exc)
+            return True, []
+        flags: list[str] = []
+        if sec.get("is_honeypot") and config.DW_GMGN_SKIP_HONEYPOT:
+            flags.append("honeypot")
+        if sec.get("is_show_alert") and config.DW_GMGN_SKIP_ALERT:
+            flags.append("gmgn_alert")
+        if sec.get("is_blacklist") not in (None, False, 0, "", -1):
+            flags.append("blacklist")
+        top10 = float(sec.get("top_10_holder_rate") or 0.0)
+        if top10 > config.DW_GMGN_TOP10_MAX:
+            flags.append(f"top10={top10:.0%}")
+        rug = float(sec.get("rug_ratio") or 0.0)
+        if rug > config.DW_GMGN_RUG_MAX:
+            flags.append(f"rug={rug:.0%}")
+        tax = max(float(sec.get("buy_tax") or 0.0), float(sec.get("sell_tax") or 0.0))
+        if tax > config.DW_GMGN_MAX_TAX:
+            flags.append(f"tax={tax:.0%}")
+        return (not flags), flags
+
     def run(self, limit: int = 50, use_dune: bool = True) -> int:
         now = datetime.now(timezone.utc)
+        self._ensure_schema()
         candidates = []
         if use_dune and os.getenv("DUNE_API_KEY") and os.getenv("DUNE_DEAD_TOKENS_QUERY_ID"):
             try:
@@ -104,6 +141,7 @@ class UniversePopulator:
             candidates += self._seed_from_signals(limit)
 
         seen = set()
+        flagged = []
         added = 0
         for c in candidates:
             addr = (c.get("token_address") or "").lower()
@@ -131,6 +169,8 @@ class UniversePopulator:
                 # is_dead: volume rendah + holder cukup + token valid (exchange_rate>0 & mcap>0)
                 if vol > config.DW_DEAD_VOLUME_USD or holders <= 100 or mcap <= 0 or er <= 0:
                     continue
+                # GMGN risk gate: buang honeypot/rug/alert/top10-konsentrasi
+                ok_gate, flags = self._gmgn_gate(addr)
                 record = {
                     "token_address": addr,
                     "chain": self.chain,
@@ -142,13 +182,32 @@ class UniversePopulator:
                     "holders": holders,
                     "last_seen": now.isoformat(),
                 }
-                self.store.client.table("dead_token_universe").upsert(
-                    {k: v for k, v in record.items() if k != "id"},
-                    on_conflict="token_address",
-                ).execute()
-                added += 1
+                if ok_gate:
+                    record["risk_flags"] = None
+                    self.store.client.table("dead_token_universe").upsert(
+                        {k: v for k, v in record.items() if k != "id"},
+                        on_conflict="token_address",
+                    ).execute()
+                    added += 1
+                else:
+                    flagged.append({"record": record, "flags": flags})
             except Exception as exc:
                 logger.warning("populate %s: %s", addr, exc)
+        # Fallback: jika tidak ada token yang lolos GMGN gate, simpan token
+        # flagged (risky) supaya dashboard tetap punya data — diberi tanda risk_flags.
+        if added == 0 and flagged:
+            logger.warning("universe kosong dari token aman — simpan %d token flagged (risky)", len(flagged))
+            for item in flagged[: max(5, limit)]:
+                rec = dict(item["record"])
+                rec["risk_flags"] = ",".join(item["flags"])
+                try:
+                    self.store.client.table("dead_token_universe").upsert(
+                        {k: v for k, v in rec.items() if k != "id"},
+                        on_conflict="token_address",
+                    ).execute()
+                    added += 1
+                except Exception as exc:
+                    logger.warning("populate flagged %s: %s", rec["token_address"], exc)
         logger.info("populate_universe %s: added=%d / seed=%d", self.chain, added, len(candidates))
         return added
 

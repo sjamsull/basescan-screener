@@ -16,6 +16,9 @@
   header h1{font-size:20px;display:flex;align-items:center;gap:8px}
   header .sub{color:var(--muted);font-size:12px;margin-top:4px}
   .wrap{max-width:1280px;margin:0 auto;padding:16px}
+  .tabcontent{max-height:calc(100vh - 220px);overflow-y:auto}
+  .tabcontent::-webkit-scrollbar{width:8px}
+  .tabcontent::-webkit-scrollbar-thumb{background:var(--border-hot);border-radius:4px}
   .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:16px 0}
   .stat{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px;backdrop-filter:blur(6px)}
   .stat .v{font-size:26px;font-weight:700;color:var(--neon)}
@@ -149,13 +152,14 @@ function renderUniverse(rows){
       <tr><th>Token</th><th>Symbol</th><th>Holders</th><th>Vol 24h</th><th>MCap</th><th>GMGN</th></tr>
       ${rows.map(r=>{
         const addr=r.token_address;
+        const risk = r.risk_flags ? `<span style="color:var(--amber)">⚠ ${r.risk_flags.split(',').slice(0,3).join(',')}</span>` : '';
         return `<tr class="row">
           <td class="mono" onclick="openToken('${addr}')">${short(addr)}</td>
           <td>${r.symbol||''}</td>
           <td>${fmt(r.holders,0)}</td>
           <td>$${fmt(r.volume_24h,0)}</td>
           <td>$${fmt(r.market_cap,0)}</td>
-          <td><a class="toklink" href="${gmgn(addr)}" target="_blank" onclick="event.stopPropagation()">gmgn</a></td>
+          <td>${risk} <a class="toklink" href="${gmgn(addr)}" target="_blank" onclick="event.stopPropagation()">gmgn</a></td>
         </tr>`
       }).join('')}
     </table>`;

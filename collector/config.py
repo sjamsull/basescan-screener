@@ -110,6 +110,13 @@ DW_EXCLUDE_NAME_PARTS = os.getenv("DW_EXCLUDE_NAME_PARTS",
 # Token di luar batas market-cap ini dianggap "mayor"/non-meme (skip).
 DW_MAX_MARKET_CAP_USD = float(os.getenv("DW_MAX_MARKET_CAP_USD", "30000000"))  # $30M max = token kecil/meme
 
+# ==== GMGN RISK GATE (filter token scam di universe) ====
+DW_GMGN_TOP10_MAX = float(os.getenv("DW_GMGN_TOP10_MAX", "0.50"))      # top10 holder <= 50% (GMGN danger >0.50)
+DW_GMGN_RUG_MAX = float(os.getenv("DW_GMGN_RUG_MAX", "0.30"))          # rug_ratio <= 0.30
+DW_GMGN_SKIP_HONEYPOT = os.getenv("DW_GMGN_SKIP_HONEYPOT", "1") == "1"  # buang honeypot
+DW_GMGN_SKIP_ALERT = os.getenv("DW_GMGN_SKIP_ALERT", "1") == "1"        # buang token ber-flag alert GMGN
+DW_GMGN_MAX_TAX = float(os.getenv("DW_GMGN_MAX_TAX", "0.10"))           # buy/sell tax <= 10%
+
 
 def active_modes() -> List[str]:
     modes: List[str] = []

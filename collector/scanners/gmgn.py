@@ -102,6 +102,43 @@ class GMGNClient:
         rank = ((data.get("data") or {}).get("data") or {}).get("rank") or (data.get("data") or {}).get("list") or []
         return [self._canonical(r) for r in rank]
 
+    def token_security(self, address: str) -> Dict:
+        """GET /v1/token/security — top10 holder, honeypot, rug, alert flags."""
+        auth = self._auth()
+        params = {**auth, "chain": self.chain, "address": address}
+        data = get_json(f"{self.base_url}/v1/token/security", headers=self._headers(), params=params)
+        d = data.get("data") or {}
+        return {
+            "address": address,
+            "top_10_holder_rate": to_float(d.get("top_10_holder_rate"), 0.0),
+            "rug_ratio": to_float(d.get("rug_ratio"), 0.0),
+            "is_honeypot": bool(d.get("is_honeypot") or False),
+            "is_blacklist": d.get("is_blacklist"),
+            "is_show_alert": bool(d.get("is_show_alert") or False),
+            "owner_renounced": bool(d.get("is_renounced") or False),
+            "open_source": bool(d.get("is_open_source") or False),
+            "buy_tax": to_float(d.get("buy_tax"), 0.0),
+            "sell_tax": to_float(d.get("sell_tax"), 0.0),
+            "burnt": d.get("burn_status"),
+            "flags": d.get("flags") or [],
+        }
+
+    def get_token_info(self, address: str) -> Dict:
+        """GET /v1/token/info — metadata + holder count + liquidity."""
+        param = self._auth()
+        params = {**param, "chain": self.chain, "address": address}
+        data = get_json(f"{self.base_url}/v1/token/info", headers=self._headers(), params=params)
+        d = data.get("data") or {}
+        return {
+            "name": d.get("name"),
+            "symbol": d.get("symbol"),
+            "decimals": d.get("decimals", 18),
+            "holder_count": int(d.get("holder_count") or 0),
+            "liquidity": to_float(d.get("liquidity"), 0.0),
+            "circulating_supply": to_float(d.get("circulating_supply"), 0.0),
+            "creation_timestamp": d.get("creation_timestamp"),
+        }
+
     def _canonical(self, raw: Dict) -> Dict:
         out = dict(raw)
         out.update({

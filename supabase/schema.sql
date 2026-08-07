@@ -81,6 +81,7 @@ create table if not exists dead_token_universe (
   created_at timestamptz,
   volume_24h float8 not null default 0,
   market_cap float8 not null default 0,
+  risk_flags text,
   first_seen timestamptz not null default now(),
   last_seen timestamptz not null default now()
 );
