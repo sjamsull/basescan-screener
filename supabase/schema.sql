@@ -86,6 +86,7 @@ create table if not exists dead_token_universe (
 );
 
 create index if not exists dead_universe_chain_idx on dead_token_universe (chain, last_seen desc);
+create index if not exists dead_universe_created_idx on dead_token_universe (first_seen);
 
 create table if not exists whale_positions (
   id bigint generated always as identity primary key,

@@ -88,6 +88,7 @@ ENABLE_MODE_DEADWHALE = os.getenv("ENABLE_MODE_DEADWHALE", "true").lower() == "t
 DW_WHALE_BALANCE_USD = float(os.getenv("DW_WHALE_BALANCE_USD", "10000"))   # saldo native wallet >= $10k
 DW_MIN_BUY_USD = float(os.getenv("DW_MIN_BUY_USD", "100"))                  # buy per tx >= $100
 DW_MIN_TOKEN_AGE_DAYS = int(os.getenv("DW_MIN_TOKEN_AGE_DAYS", "30"))      # token umur >= 30 hari
+DW_DEAD_TXNS_THRESHOLD = int(os.getenv("DW_DEAD_TXNS_THRESHOLD", "5"))   # txns 24h <= 5 = dead
 DW_MAX_PRICE_RISE_12H = float(os.getenv("DW_MAX_PRICE_RISE_12H", "10"))     # max naik 10% dalam 12h
 DW_MAX_PRICE_RISE_36H = float(os.getenv("DW_MAX_PRICE_RISE_36H", "20"))     # max naik 20% dalam 36h
 DW_MAX_VOLUME_MULTIPLIER = float(os.getenv("DW_MAX_VOLUME_MULTIPLIER", "3"))  # volume < 3x avg 7d
