@@ -302,10 +302,12 @@ class BlockscoutClient:
         for _ in range(max(1, pages)):
             url = f"{base}/api/v2/tokens?items_count={min(page_size, 50)}"
             if next_params:
-                sep = "?"
-                for k, v in next_params.items():
-                    url += f"{sep}{k}={v}"
-                    sep = "&"
+                from urllib.parse import urlencode
+                clean = {
+                    k: ("true" if v is True else "false" if v is False else v)
+                    for k, v in next_params.items()
+                }
+                url += "&" + urlencode(clean)
             try:
                 data = get_json(url, timeout=30, retries=1)
             except Exception as exc:

@@ -57,6 +57,21 @@ class UniversePopulator:
         rows = self.store.client.table("signals").select("token_address,chain").eq("chain", self.chain).order("signal_at", desc=True).limit(limit).execute()
         return [{"token_address": r.get("token_address", "")} for r in (rows.data or [])]
 
+    def _enrich(self, addr: str):
+        """Isi field yang Dune tidak sediakan (holders, market_cap, exchange_rate)."""
+        info = self.bs.token_info(self.chain, addr)
+        if not info:
+            return None
+        return {
+            "symbol": info.get("symbol"),
+            "decimals": info.get("decimals", 18),
+            "total_supply": str(info.get("total_supply") or 0),
+            "market_cap": float(info.get("market_cap") or 0.0),
+            "volume_24h": float(info.get("volume_24h") or 0.0),
+            "holders": int(info.get("holders") or 0),
+            "exchange_rate": float(info.get("exchange_rate") or 0.0),
+        }
+
     def run(self, limit: int = 50, use_dune: bool = True) -> int:
         now = datetime.now(timezone.utc)
         candidates = []
@@ -85,6 +100,15 @@ class UniversePopulator:
                 holders = int(c.get("holders") or 0)
                 mcap = float(c.get("market_cap") or 0.0)
                 er = float(c.get("exchange_rate") or 0.0)
+                # Dune hanya menyuplai token_address/age/txns — lengkapi via Blockscout
+                if mcap <= 0 or er <= 0 or holders <= 0:
+                    enr = self._enrich(addr)
+                    if enr:
+                        c = {**c, **enr}
+                        vol = enr["volume_24h"]
+                        holders = enr["holders"]
+                        mcap = enr["market_cap"]
+                        er = enr["exchange_rate"]
                 # is_dead: volume rendah + holder cukup + token valid (exchange_rate>0 & mcap>0)
                 if vol > config.DW_DEAD_VOLUME_USD or holders <= 100 or mcap <= 0 or er <= 0:
                     continue
