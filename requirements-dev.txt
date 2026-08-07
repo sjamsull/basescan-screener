@@ -1,0 +1,2 @@
+-r collector/requirements.txt
+pytest>=8.0
