@@ -78,9 +78,21 @@ class BacktestTracker:
         plan = pd.get("plan") or {}
         tp_x = plan.get("tp_ladder_x") or []
         inv_pct = plan.get("invalidation_pct")
+        inv_mcap = to_float(plan.get("invalidation_mcap"), 0.0)
         if not tp_x or inv_pct is None:
             return None
-        return {"tp_x": [to_float(x, 0.0) for x in tp_x], "inv_pct": to_float(inv_pct, 0.0)}
+        # Baseline harus dari mcap SAAT SINYAL (bukan track pertama — track pertama
+        # bisa sudah jauh dari harga sinyal karena jeda jam antara sinyal & tracking).
+        current = to_float(plan.get("current_mcap"), 0.0)
+        if current <= 0 and inv_mcap > 0:
+            current = inv_mcap / (1.0 + inv_pct / 100.0)
+        if current <= 0:
+            return None
+        return {
+            "tp_x": [to_float(x, 0.0) for x in tp_x],
+            "inv_pct": to_float(inv_pct, 0.0),
+            "entry_mcap": current,
+        }
 
     def fetch_quote(self, chain: str, address: str) -> Optional[Dict]:
         try:
@@ -103,8 +115,7 @@ class BacktestTracker:
         """
         if not tracks:
             return {"state": "NO_DATA"}
-        first = tracks[0]
-        entry_mcap = to_float(first.get("mcap"), 0.0)
+        entry_mcap = plan.get("entry_mcap", 0.0)
         if entry_mcap <= 0:
             return {"state": "NO_BASELINE", "pnl": 0.0, "time_to_tp1": None}
 
@@ -116,7 +127,7 @@ class BacktestTracker:
         inv_at = None
         last = dict(tracks[-1])
         last_mcap = to_float(last.get("mcap"), 0.0)
-        first_ts = first.get("tracked_at")
+        first_ts = tracks[0].get("tracked_at")
         res = {"state": "ACTIVE", "best_tp": 0, "time_to_tp1": None,
                "pnl": None, "entry": entry_mcap}
 
