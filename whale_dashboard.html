@@ -138,7 +138,7 @@ function renderUniverse(rows){
 
 async function load(){
   try{
-    const [w,u]=await Promise.allSettled([q('whale_positions','last_buy_at.desc,nulls.last'), q('dead_token_universe','last_seen.desc,nulls.last')]);
+    const [w,u]=await Promise.allSettled([q('whale_positions','last_buy_at.desc'), q('dead_token_universe','last_seen.desc')]);
     const wr=w.status==='fulfilled'?w.value:[];
     const ur=u.status==='fulfilled'?u.value:[];
     renderWhales(wr); renderUniverse(ur);
