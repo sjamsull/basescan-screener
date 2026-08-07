@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DEAD WHALE DETECTOR</title>
+<style>
+  :root{
+    --bg:#0a0a0f; --card:#0f1117cc; --neon:#00ffaa; --red:#ff3e7e; --amber:#ffd23f;
+    --blue:#00c2ff; --text:#e8e8f0; --muted:#8a8fa8; --border:#1e202a;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Courier New',monospace;background:var(--bg);color:var(--text);}
+  .scanlines{position:fixed;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.15) 0 2px,transparent 2px 4px);opacity:.4;z-index:5}
+  header{padding:16px 24px;border-bottom:2px solid var(--neon);box-shadow:0 0 20px var(--neon)}
+  header h1{font-size:20px;display:flex;align-items:center;gap:8px}
+  header .sub{color:var(--muted);font-size:12px;margin-top:4px}
+  .wrap{max-width:1280px;margin:0 auto;padding:16px}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:16px 0}
+  .stat{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px;backdrop-filter:blur(6px)}
+  .stat .v{font-size:28px;font-weight:700;color:var(--neon)}
+  .stat .l{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+  .tabs{display:flex;gap:4px;margin:18px 0;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+  .tab{padding:10px 16px;cursor:pointer;font-size:13px;color:var(--muted);border-bottom:2px solid transparent;background:rgba(20,22,30,.6)}
+  .tab.active{color:var(--text);border-bottom-color:var(--neon);background:rgba(20,24,34,.9)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:9px 11px;text-align:left;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums}
+  th{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em;position:sticky;top:0;background:rgba(8,8,12,.9)}
+  td.mono{font-family:'Courier New',monospace}
+  .pill{padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;text-transform:uppercase}
+  .WATCH{background:rgba(255,210,61,.15);color:var(--amber);border:1px solid var(--amber)}
+  .CONFIRM{background:rgba(0,255,170,.15);color:var(--neon);border:1px solid var(--neon)}
+  .SIGNAL{background:rgba(255,62,126,.2);color:var(--red);border:1px solid var(--red)}
+  .DUMPED{background:rgba(130,130,150,.2);color:var(--muted);border:1px solid var(--muted)}
+  .bar{height:6px;border-radius:3px;background:var(--card);border:1px solid var(--border);overflow:hidden}
+  .bar > span{display:block;height:100%}
+  .muted{color:var(--muted)}
+  .empty{color:var(--muted);padding:26px;text-align:center;font-size:13px}
+  footer{margin-top:24px;color:var(--muted);font-size:11px;text-align:center}
+  a{color:var(--blue);text-decoration:none}
+  .blink{animation:blink 1.4s steps(4,start) infinite}
+  @keyframes blink{to{opacity:.35}}
+  @media(max-width:760px){body{font-size:13px}.stats{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="scanlines"></div>
+<header>
+  <h1><span id="pulse" class="blink">●</span> DEAD WHALE DETECTOR</h1>
+  <div class="sub">Base • akumulasi diam-diam di token mati · <span id="last">loading…</span></div>
+</header>
+<div class="wrap">
+  <div class="stats">
+    <div class="stat"><div class="v" id="s-signals">–</div><div class="l">Sinyal (status)</div></div>
+    <div class="stat"><div class="v" id="s-whales">–</div><div class="l">Whale wallet</div></div>
+    <div class="stat"><div class="v" id="s-universe">–</div><div class="l">Token mati di universe</div></div>
+    <div class="stat"><div class="v" id="s-buyusd">–</div><div class="l">Total akumulasi (USD)</div></div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" onclick="setTab('whales')">WHALE POSITIONS</div>
+    <div class="tab" onclick="setTab('universe')">TOKEN MATI (UNIVERSE)</div>
+  </div>
+
+  <div id="tab-whales" class="tabcontent">
+    <div id="whales-wrap"><div class="empty">Memuat…</div></div>
+  </div>
+  <div id="tab-universe" class="tabcontent" style="display:none">
+    <div id="universe-wrap"><div class="empty">Memuat…</div></div>
+  </div>
+
+  <footer>
+    Base • Dead-Whale v1 • scan tiap 6 jam via GitHub Actions
+    · <a href="https://github.com/sjamsull/basescan-screener" target="_blank">repo</a>
+  </footer>
+</div>
+
+<script>
+const SUPABASE_URL = "https://tyqtxtgadxwrvbkktpiy.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR5cXR4dGdhZHh3cnZia2t0cGl5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU5NTI0MDYsImV4cCI6MjEwMTUyODQwNn0.ukroYY74wVx1bCC7sa36I8AGKl5EVNB8MGv6tQ5JKKI";
+
+async function q(table, order) {
+  const u = new URL(SUPABASE_URL + "/rest/v1/" + table);
+  if (order) u.searchParams.set("order", order);
+  const r = await fetch(u, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } });
+  if (!r.ok) throw new Error(table + " " + r.status);
+  return r.json();
+}
+
+function short(a){return a ? (a.length>18? a.slice(0,6)+"…"+a.slice(-10):a) : "—";}
+function fmt(v,n=2){return v==null||v===""?"—":Number(v).toLocaleString(undefined,{maximumFractionDigits:n});}
+function ago(ts){
+  const t=new Date(ts); if(isNaN(t)) return "—";
+  const s=Math.floor((Date.now()-t)/1000);
+  if(s<0) return "baru";
+  const d=Math.floor(s/86400), h=Math.floor(s%86400/3600), m=Math.floor(s%3600/60);
+  return d?d+"d":" "+(h?h+"h":" "+m+"m");
+}
+
+function pill(s){return `<span class="pill ${s}">${s||'WATCH'}</span>`; }
+
+function renderWhales(rows){
+  if(!rows.length){document.getElementById('whales-wrap').innerHTML='<div class="empty">Belum ada whale terdeteksi. Scan berikutnya dalam 6 jam.</div>';return;}
+  document.getElementById('whales-wrap').innerHTML = `
+    <table>
+      <tr><th>Token</th><th>Wallet</th><th>Status</th><th>Buy</th><th>Sell</th><th>Akumulasi (USD)</th><th>Hold</th><th>Last buy</th></tr>
+      ${rows.map(r=>
+        `<tr>
+          <td class="mono muted">${short(r.token_address)}</td>
+          <td class="mono">${short(r.wallet)}</td>
+          <td>${pill(r.status)}</td>
+          <td>${fmt(r.buy_count,0)}</td>
+          <td>${fmt(r.sell_count,0)}</td>
+          <td>$${fmt(r.buy_usd,0)}</td>
+          <td>${fmt(r.hold_days,1)}d</td>
+          <td>${ago(r.last_buy_at)}</td>
+        </tr>`
+      ).join('')}
+    </table>`;
+}
+
+function renderUniverse(rows){
+  if(!rows.length){document.getElementById('universe-wrap').innerHTML='<div class="empty">Universe belum terisi. Jalankan populate_universe.</div>';return;}
+  document.getElementById('universe-wrap').innerHTML = `
+    <table>
+      <tr><th>Token</th><th>Holders</th><th>Vol 24h</th><th>MCap</th><th>First seen</th></tr>
+      ${rows.map(r=>
+        `<tr>
+          <td class="mono"><b>${r.symbol||short(r.token_address)}</b> ${short(r.token_address)}</td>
+          <td>${fmt(r.holders,0)}</td>
+          <td>$${fmt(r.volume_24h,0)}</td>
+          <td>$${fmt(r.market_cap,0)}</td>
+          <td>${r.first_seen?new Date(r.first_seen).toLocaleDateString():'—'}</td>
+        </tr>`
+      ).join('')}
+    </table>`;
+}
+
+async function load(){
+  try{
+    const [w,u]=await Promise.allSettled([q('whale_positions','last_buy_at.desc,nulls.last'), q('dead_token_universe','last_seen.desc,nulls.last')]);
+    const wr=w.status==='fulfilled'?w.value:[];
+    const ur=u.status==='fulfilled'?u.value:[];
+    renderWhales(wr); renderUniverse(ur);
+    document.getElementById('s-whales').textContent=wr.length;
+    document.getElementById('s-universe').textContent=ur.length;
+    const sig={WATCH:0,CONFIRM:0,SIGNAL:0,DUMPED:0};
+    let buy=0;
+    wr.forEach(r=>{sig[r.status]=(sig[r.status]+1||1); buy+=Number(r.buy_usd||0);});
+    document.getElementById('s-signals').innerHTML=Object.entries(sig).map(([k,v])=>`<span class="pill ${k}">${k} ${v}</span>`).join(' ')||'—';
+    document.getElementById('s-buyusd').textContent=`$${Math.round(buy).toLocaleString()}`;
+    document.getElementById('last').textContent=`update ${new Date().toLocaleTimeString()}`;
+  }catch(e){
+    document.getElementById('whales-wrap').innerHTML=`<div class="empty">⚠ Gagal fetch: ${e.message}</div>`;
+  }
+}
+function setTab(id){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.t===id));
+  document.querySelectorAll('.tabcontent').forEach(c=>c.style.display=c.id===id?'':'none');
+  document.querySelectorAll('.tab').forEach((t,i)=>t.dataset.t=['whales','universe'][i]);
+  // activate first tab binding
+  document.querySelector('#tab-'+id).style.display='';
+}
+document.querySelectorAll('.tab').forEach((t,i)=>{t.dataset.t=['whales','universe'][i];t.onclick=()=>setTab(['whales','universe'][i]);});
+load(); setInterval(load,30000);
+</script>
+</body>
+</html>
