@@ -493,6 +493,7 @@ const ago = (ts) => {
 };
 const gmgn = (a) => a ? `https://gmgn.ai/${CUR==='robinhood'?'robinhood':'base'}/token/${a.toLowerCase()}` : "#";
 const gmgnChain = (s) => s && s.token_address ? `https://gmgn.ai/${s.chain==='robinhood'?'robinhood':'base'}/token/${s.token_address.toLowerCase()}` : "#";
+const chainlens = (a) => a ? `https://finland93.github.io/ChainLens/?token=${a.toLowerCase()}` : "#";
 const arkm = (a) => a ? `https://arkm.com/explorer/address/${a}` : "#";
 
 async function q(table, params={}) {
@@ -548,6 +549,7 @@ function secChips(sec){
   if (sec.open_source === false) c.push('<span class="sig warn">CLOSED SRC</span>');
   if (sec.is_blacklist) c.push('<span class="sig bad">⛔ BLACKLIST</span>');
   if (sec.is_show_alert) c.push('<span class="sig bad">⚠ GMGN ALERT</span>');
+  if (sec.burnt) c.push(`<span class="sig good">🔥 ${esc(String(sec.burnt))}</span>`);
   (sec.flags || []).slice(0,2).forEach(f => c.push(`<span class="sig warn">${esc(f)}</span>`));
   return c.join('');
 }
@@ -565,7 +567,7 @@ function renderTokens(list){
       <div class="card-top">
         <div class="rank">#${String(i+1).padStart(2,'0')}</div>
         <div class="sym-block">
-          <div class="sym">${esc(t.symbol||'—')} <a href="${gmgn(t.token_address)}" target="_blank" rel="noopener" title="Buka di GMGN" onclick="event.stopPropagation()">↗</a></div>
+          <div class="sym">${esc(t.symbol||'—')} <a href="${gmgn(t.token_address)}" target="_blank" rel="noopener" title="Buka di GMGN" onclick="event.stopPropagation()">↗</a> <a href="${chainlens(t.token_address)}" target="_blank" rel="noopener" title="Buka di ChainLens" onclick="event.stopPropagation()">🔍</a></div>
           <div class="tname">${short(t.token_address)}</div>
         </div>
         <span class="rating ${ts.pos.length ? 'r-buy' : 'r-neutral'}">${ts.pos.length ? 'POTENSIAL' : 'KANDIDAT'}</span>
@@ -746,7 +748,8 @@ async function openToken(addr){
         </div>
       </div>
       <div class="signal-row" style="margin-top:16px">
-        <a class="sig info" href="${gmgn(addr)}" target="_blank">Buka di GMGN ↗</a>
+        <a class="sig info" href="${gmgn(addr)}" target="_blank" rel="noopener">Buka di GMGN ↗</a>
+        <a class="sig info" href="${chainlens(addr)}" target="_blank" rel="noopener">ChainLens 🔍</a>
       </div>`;
   }catch(e){
     $('modal').innerHTML += '<div class="empty">⚠ ' + esc(e.message) + '</div>';
