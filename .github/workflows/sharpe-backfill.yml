@@ -1,0 +1,40 @@
+name: Sharpe Rug Check Backfill
+
+on:
+  workflow_dispatch:     # manual trigger saja
+    inputs:
+      chain:
+        description: 'Chain to scan'
+        required: true
+        default: 'base'
+        type: choice
+        options:
+          - base
+      sleep:
+        description: 'Spacing between requests (seconds)'
+        required: true
+        default: '5'
+        type: string
+
+jobs:
+  sharpe-backfill:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r collector/requirements.txt
+
+      - name: Backfill Sharpe rug-check
+        env:
+          SHARPE_API_KEY: ${{ secrets.SHARPE_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          python -m collector.backfill_sharpe_rug --chain ${{ github.event.inputs.chain }} --sleep ${{ github.event.inputs.sleep }}
