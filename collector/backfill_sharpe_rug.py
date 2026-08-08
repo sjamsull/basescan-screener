@@ -66,12 +66,21 @@ def main() -> int:
 
         filled = 0
         missing = 0
+        streak_429 = 0
         for a in pending:
             rep = client.rug_check(a, ch)
             time.sleep(sleep_s)
             if not rep:
                 missing += 1
+                streak_429 += 1
+                # Kalau 429 beruntun (>=3), pause panjang supaya window RPM
+                # benar-benar clear sebelum lanjut — jangan buoy terus.
+                if streak_429 >= 3:
+                    logger.warning("%s: %dx rate-limited berturut, istirahat 120s", ch, streak_429)
+                    time.sleep(120)
+                    streak_429 = 0
                 continue
+            streak_429 = 0
             payload = json.dumps(rep, ensure_ascii=False, default=str)
             if dry:
                 logger.info("[dry] %s %s flags=%s", ch, a[:10],
