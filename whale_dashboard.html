@@ -433,7 +433,7 @@
     <div class="track-cols">
       <div class="track-cell" onclick="openTrackPage('tp1')" title="Lihat token yang kena TP1"><b id="t-tp1">—</b><span>hit rate TP1 ›</span></div>
       <div class="track-cell" onclick="openTrackPage('inv')" title="Lihat token yang invalid"><b id="t-inv">—</b><span>invalidasi ›</span></div>
-      <div class="track-cell" onclick="openTrackPage('tp1')" title="Waktu tempuh ke TP1"><b id="t-tt1">—</b><span>waktu ke TP1 ›</span></div>
+      <div class="track-cell" onclick="openTrackPage('tt1')" title="Waktu tempuh ke TP1"><b id="t-tt1">—</b><span>waktu ke TP1 ›</span></div>
       <div class="track-cell" onclick="openTrackPage('eval')" title="Semua sinyal dievaluasi"><b id="t-eval">—</b><span>sinyal dievaluasi ›</span></div>
       <div class="track-cell" onclick="openTrackPage('pantau')" title="Jam sinyal & jam hit per token"><b id="t-tp123">—</b><span>pantauan TP ›</span></div>
       <div class="track-cell" onclick="openTrackPage('anom')" title="Anomali waktu ke TP1"><b id="t-anom">—</b><span>anomali TT1 ›</span></div>
@@ -926,6 +926,15 @@ const mcNow = (s) => {
     const rows = SIGS.filter(s => s.tp1_at).sort((a,b) => (a.time_to_tp1_h??1e9) - (b.time_to_tp1_h??1e9));
     openModal('TP1 · token yang kena TP1 (' + rows.length + ')',
       tableHTML(cols, rows, s => [scCell(s), nameCell(s), netCell(s), mcIn(s), mcNow(s)], 'Belum ada yang kena TP1.'));
+  } else if (kind === 'tt1') {
+    const cols = [{ t: 'SC' }, { t: 'Token' }, { t: 'Jaringan' }, { t: 'MC masuk radar' }, { t: 'Jam signal' }, { t: 'Jam hit TP1' }, { t: 'Durasi', num: true }];
+    const rows = SIGS.filter(s => s.tp1_at && s.signal_at).sort((a,b) => (a.time_to_tp1_h??1e9) - (b.time_to_tp1_h??1e9));
+    openModal('Waktu ke TP1 · durasi masuk radar → hit TP1 (' + rows.length + ')',
+      tableHTML(cols, rows, s => [
+        scCell(s), nameCell(s), netCell(s), mcIn(s),
+        fmtAtt(s.signal_at), fmtAtt(s.tp1_at),
+        (s.time_to_tp1_h == null ? '—' : s.time_to_tp1_h + 'h')
+      ], 'Belum ada sinyal ber-TP1.'));
   } else if (kind === 'inv') {
     const cols = [{ t: 'SC' }, { t: 'Token' }, { t: 'Jaringan' }, { t: 'MC masuk radar' }, { t: 'MC saat ini', num: true }, { t: 'Status' }];
     const rows = SIGS.filter(s => s.status === 'INVALIDATED').sort((a,b) => (b.signal_at||'').localeCompare(a.signal_at||''));

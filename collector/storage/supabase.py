@@ -53,20 +53,29 @@ class SupabaseStorage:
 
     def save_signal(self, rec: Dict) -> None:
         from collector.processors.plan import compact_plan
-        prepared = {
-            "plan": compact_plan(rec),
-            "symbol": (rec.get("symbol") or "")[:24] or None,
-            "alpha_breakdown": rec.get("alpha_breakdown"),
-            "risk_flags": rec.get("risk_flags"),
-            "momentum": rec.get("momentum"),
-        }
         addr = rec.get("address", "")
         try:
-            existing = self.client.table("signals").select("signal_at").eq(
+            existing = self.client.table("signals").select("signal_at,prepared_data").eq(
                 "token_address", addr
             ).limit(1).execute()
         except Exception:
             existing = None
+
+        # Pertahankan symbol lama kalau feed kali ini kosong — filter non-meme &
+        # dashboard Track Record bergantung pada symbol, dan feed trending GMGN
+        # sering datang tanpa symbol (menimpa ke kosong = token jadi "tidak dikenal").
+        new_sym = (rec.get("symbol") or "").strip()[:24]
+        old_pd = (existing.data[0].get("prepared_data") if (existing and existing.data) else {}) or {}
+        if not new_sym:
+            new_sym = (old_pd.get("symbol") or "").strip()[:24]
+
+        prepared = {
+            "plan": compact_plan(rec),
+            "symbol": new_sym or None,
+            "alpha_breakdown": rec.get("alpha_breakdown"),
+            "risk_flags": rec.get("risk_flags"),
+            "momentum": rec.get("momentum"),
+        }
 
         payload = {
             "token_address": addr,
