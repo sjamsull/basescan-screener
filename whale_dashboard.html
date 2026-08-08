@@ -491,6 +491,16 @@ const ago = (ts) => {
   const d=Math.floor(s/86400), h=Math.floor(s%86400/3600), m=Math.floor(s%3600/60);
   return d?d+"d":(h?h+"h":" "+m+"m");
 };
+const ageStr = (ts) => {
+  if (!ts) return '—';
+  const t = new Date(ts); if (isNaN(t)) return '—';
+  const s = Math.floor((Date.now() - t) / 1000); if (s < 0) return 'baru';
+  const d = Math.floor(s / 86400);
+  if (d >= 30) return (d / 30).toFixed(d >= 365 ? 1 : 0).replace(/\.0$/, '') + 'mo';
+  if (d >= 7) return d + 'd';
+  const h = Math.floor(s % 86400 / 3600);
+  return h ? h + 'h' : Math.floor(s % 3600 / 60) + 'm';
+};
 const gmgn = (a) => a ? `https://gmgn.ai/${CUR==='robinhood'?'robinhood':'base'}/token/${a.toLowerCase()}` : "#";
 const gmgnChain = (s) => s && s.token_address ? `https://gmgn.ai/${s.chain==='robinhood'?'robinhood':'base'}/token/${s.token_address.toLowerCase()}` : "#";
 const chainlens = (a) => a ? `https://finland93.github.io/ChainLens/?token=${a.toLowerCase()}` : "#";
@@ -591,6 +601,7 @@ function renderTokens(list){
       </div>
       <div class="signal-row">
         <span class="sig info">◈ ${CUR==='robinhood'?'ROBINHOOD':'BASE'}</span>
+        <span class="sig" title="Umur token sejak deploy">🕓 ${ageStr(t.created_at)}</span>
         <a class="sig info" href="${gmgn(t.token_address)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">gmgn ↗</a>
         ${risk}
       </div>
