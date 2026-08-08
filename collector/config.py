@@ -85,6 +85,9 @@ ENABLE_MODE_DEADWHALE = os.getenv("ENABLE_MODE_DEADWHALE", "true").lower() == "t
 DW_WHALE_BALANCE_USD = float(os.getenv("DW_WHALE_BALANCE_USD", "10000"))   # saldo native wallet >= $10k
 DW_MIN_BUY_USD = float(os.getenv("DW_MIN_BUY_USD", "100"))                  # buy per tx >= $100
 DW_MIN_TOKEN_AGE_DAYS = int(os.getenv("DW_MIN_TOKEN_AGE_DAYS", "30"))      # token umur >= 30 hari
+# Umur minimum token di dashboard universe (robinhood banyak token muda).
+# Berdasarkan creation_timestamp deploy token (GMGN), bukan first_seen.
+UNIVERSE_MIN_AGE_DAYS = int(os.getenv("UNIVERSE_MIN_AGE_DAYS", "7"))
 DW_DEAD_TXNS_THRESHOLD = int(os.getenv("DW_DEAD_TXNS_THRESHOLD", "5"))   # txns 24h <= 5 = dead
 DW_DEAD_VOLUME_USD = float(os.getenv("DW_DEAD_VOLUME_USD", "1000"))      # volume 24h <= USD 1000 = dead
 DW_UNIVERSE_PAGES = int(os.getenv("DW_UNIVERSE_PAGES", "8"))             # halaman /api/v2/tokens discan (50/token)

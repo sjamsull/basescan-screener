@@ -180,12 +180,22 @@ class UniversePopulator:
                 # MC otoritatif dari GMGN (bukan Blockscout/DexScreener per-pair).
                 # Fallback ke mcap Blockscout bila get_token_info gagal.
                 gmgn_mcap = mcap
+                created_ts = 0
                 try:
                     gi = self.gmgn.get_token_info(addr)
-                    if gi and float(gi.get("market_cap") or 0.0) > 0:
-                        gmgn_mcap = float(gi["market_cap"])
+                    if gi:
+                        if float(gi.get("market_cap") or 0.0) > 0:
+                            gmgn_mcap = float(gi["market_cap"])
+                        created_ts = int(gi.get("creation_timestamp") or 0)
                 except Exception as exc:
                     logger.debug("gmgn info %s: %s", addr[:10], exc)
+                # Filter umur: skip token terlalu muda (banyak rug-pull di
+                # robinhood). 0 = umur tidak diketahui -> biarkan lewat (bukan tolak).
+                if created_ts > 0:
+                    age_days = (now.timestamp() - created_ts) / 86400.0
+                    if age_days < config.UNIVERSE_MIN_AGE_DAYS:
+                        logger.info("skip muda %s age=%.1fd (< %dd)", addr[:10], age_days, config.UNIVERSE_MIN_AGE_DAYS)
+                        continue
                 record = {
                     "token_address": addr,
                     "chain": self.chain,
@@ -195,6 +205,7 @@ class UniversePopulator:
                     "market_cap": gmgn_mcap,
                     "volume_24h": vol,
                     "holders": holders,
+                    "created_at": datetime.fromtimestamp(created_ts, timezone.utc).isoformat() if created_ts > 0 else None,
                     "last_seen": now.isoformat(),
                     "security_json": json.dumps(gsec, ensure_ascii=False, default=str) if gsec else None,
                 }
