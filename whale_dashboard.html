@@ -606,6 +606,44 @@ function renderContractScan(r) {
   if (r.detected && r.detected.length) h += row('Privileged fns', r.detected.slice(0, 4).join(' · '), 'warn');
   return h;
 }
+function parseSharpe(t){
+  if (!t || !t.sharpe_json) return null;
+  try { return JSON.parse(t.sharpe_json); } catch(e) { return null; }
+}
+function renderSharpe(s){
+  const row = (k, v, cls = '') => `<div class="gline"><span class="k">${k}</span><b class="v ${cls}">${v}</b></div>`;
+  const yn = (b, tr = 'ok', fl = 'bad') => b ? `<span class="${fl}">YA ⛔</span>` : `<span class="${tr}">Tidak</span>`;
+  if (!s) return '<div class="empty" style="padding:14px 6px">Belum ada data Sharpe.</div>';
+  let h = '';
+  h += row('Honeypot', yn(s.is_honeypot));
+  h += row('Mintable', yn(s.mintable));
+  h += row('Blacklist', yn(s.blacklist));
+  h += row('Hidden owner', yn(s.hidden_owner));
+  h += row('Selfdestruct', yn(s.selfdestruct));
+  h += row('Pausable', yn(s.pausable));
+  h += row('Cannot sell all', yn(s.cannot_sell_all));
+  h += row('Proxy', yn(s.is_proxy));
+  h += row('Open source', yn(s.open_source, 'bad', 'ok'));
+  h += row('Anti-whale', yn(s.anti_whale));
+  h += row('External call', yn(s.external_call));
+  h += row('In CEX', yn(s.isInCex, 'ok', ''));
+  if (s.cex_list && s.cex_list.length) h += row('CEX', esc(s.cex_list.slice(0, 4).join(', ')), 'ok');
+  h += row('Buy tax', (s.buy_tax || 0) + '%', (s.buy_tax || 0) > 10 ? 'warn' : '');
+  h += row('Sell tax', (s.sell_tax || 0) + '%', (s.sell_tax || 0) > 10 ? 'warn' : '');
+  h += row('Creator %', (s.creator_percent || 0) + '%', (s.creator_percent || 0) > 20 ? 'warn' : '');
+  h += row('Owner %', (s.owner_percent || 0) + '%', (s.owner_percent || 0) > 20 ? 'warn' : '');
+  h += row('Holders', s.holder_count != null ? fmt(s.holder_count, 0) : '—');
+  if (s.top_holders && s.top_holders.length){
+    h += row('Top holders', '');
+    s.top_holders.slice(0, 4).forEach(th => {
+      h += `<div class="gline" style="padding-left:10px;font-size:0.66rem"><span class="k">${short(th.address)}</span><b class="v ${th.locked ? 'ok' : 'warn'}">${th.percent}% ${th.locked ? '🔒' : ''}</b></div>`;
+    });
+  }
+  h += row('DEX count', s.dex_count || 0);
+  h += row('LP liq', s.lp_liquidity_total != null ? '$' + fmt(s.lp_liquidity_total, 0) : '—');
+  if (s.flags && s.flags.length) h += row('⚠ Flags', esc(s.flags.join(', ')), 'warn');
+  return h;
+}
 
 async function q(table, params={}) {
   const u = new URL(SUPABASE_URL + "/rest/v1/" + table + "?");
@@ -908,6 +946,13 @@ async function openToken(addr){
           <h4>ContractScan (on-chain)</h4>
           <div id="cs-base"><div class="empty" style="padding:14px 6px"><span class="spin"></span> Scanning contract…</div></div>
         </div>` : ''}
+        <div class="msec">
+          <h4>Sharpe Rug Check</h4>
+          ${(() => {
+            const s = parseSharpe(u);
+            return renderSharpe(s);
+          })()}
+        </div>
         <div class="msec" style="grid-column:span 2">
           <h4>Whale Positions (${pos.length})</h4>
           ${posHtml}
