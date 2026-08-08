@@ -86,14 +86,12 @@ create table if not exists dead_token_universe (
   risk_flags text,
   security_json text,  -- GMGN /v1/token/security (top10, rug, tax, honeypot, flags) sebagai JSON mini
   verrow_json text,    -- VERROW /api/scan report (chain 4663 robinhood) — risk, findings, ownership, liquidity lock
-  sharpe_json text,    -- SHARPE /v1/rug-check/security (base+robinhood) — honeypot/mint/blacklist/proxy/tax/holders/CEX
   first_seen timestamptz not null default now(),
   last_seen timestamptz not null default now()
 );
 
 -- Uncomment untuk menambahkan kolom pada DB yang sudah ada (jalankan di Supabase SQL Editor):
 -- alter table dead_token_universe add column if not exists verrow_json text;
--- alter table dead_token_universe add column if not exists sharpe_json text;
 
 create index if not exists dead_universe_chain_idx on dead_token_universe (chain, last_seen desc);
 create index if not exists dead_universe_created_idx on dead_token_universe (first_seen);
