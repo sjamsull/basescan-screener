@@ -770,7 +770,7 @@ window.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); 
 let lastSig = '';
 let TRACK = null; // tak terpakai lagi: metrik dihitung dari SIGS per chain
 let LAST_SCAN = null;
-let SIGS = [], SYMBOL_MAP = {}, SYM_MC = {}, TRK_MC = {}, SIGS_CHAIN = null;
+let SIGS = [], SYMBOL_MAP = {}, SYM_MC = {}, SIGS_CHAIN = null;
 const SCAN_INTERVAL_H = 6; // cron: 0 */6 * * *
 function dataSig() {
   return (CUR + '|' + DATA_U.length + '|' + DATA_U.map(t => t.token_address).join(','));
@@ -854,28 +854,6 @@ function renderTrack() {
 
 /* ── Sub-halaman Track Record (tabel detail per sinyal) ── */
 const planOf = (s) => { const pd = s.prepared_data || {}; return pd.plan || {}; };
-/* MC dari scan berikutnya: ambil track terakhir per token (signal_tracks).
-   distinct via header Prefer (bukan query param). */
-async function loadTrackMC(addrs) {
-  if (!addrs.length) return;
-  TRK_MC = {};
-  const chunks = [];
-  for (let i = 0; i < addrs.length; i += 80) chunks.push(addrs.slice(i, i + 80));
-  try {
-    const rs = await Promise.allSettled(chunks.map(async c => {
-      const u = new URL(SUPABASE_URL + "/rest/v1/signal_tracks?");
-      [['select','token_address,mcap'],['token_address',`in.(${c.join(',')})`],['order','tracked_at.desc'],['limit','1000']].forEach(([k,v]) => u.searchParams.set(k, v));
-      const r = await fetch(u, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, Prefer: 'distinct=on(token_address)' } });
-      if (!r.ok) throw new Error('signal_tracks ' + r.status);
-      return r.json();
-    }));
-    rs.forEach(r => {
-      if (r.status === 'fulfilled') (r.value || []).forEach(t => {
-        if (t.token_address && t.mcap) TRK_MC[t.token_address] = t.mcap;
-      });
-    });
-  } catch (e) { /* non-fatal */ }
-}
 const symOf = (addr) => SYMBOL_MAP[addr] || short(addr);
 const netOf = (s) => (s.chain === 'robinhood' ? 'ROBINHOOD' : 'BASE');
 const fmtAtt = (ts) => ts ? new Date(ts).toLocaleString('id-ID', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -905,11 +883,9 @@ function openTrackPage(kind) {
   const scCell = (s) => `<a class="tk" href="${gmgnChain(s)}" target="_blank" rel="noopener" title="${esc(s.token_address)}">${esc(short(s.token_address))}</a>`;
   const nameCell = (s) => esc(SYMBOL_MAP[s.token_address] || '—');
   const netCell = (s) => esc(netOf(s));
-  /* MC hasil scan berikutnya (track terakhir) — kalau naik vs MC masuk radar = hijau ▲,
-   turun = merah ▼. Fallback universe bila belum pernah di-track. */
+  /* MC saat ini vs MC masuk radar → ▲ naik / ▼ turun. Berbasis GMGN. */
 const mcNow = (s) => {
-  /* MC "saat ini" = GMGN saja (dead_token_universe.market_cap backfill GMGN).
-     signal_tracks/DexScreener tidak dipakai lagi — per-pair meleset drastis. */
+  /* MC "saat ini" = GMGN saja (dead_token_universe.market_cap backfill GMGN). */
   const mc = SYM_MC[s.token_address];
   if (!mc) return '—';
   const txt = fmtUsd(mc);
@@ -1006,14 +982,11 @@ async function load(){
             q('dead_token_universe', { select: 'token_address,symbol,market_cap', chain: `eq.${CUR}`, token_address: `in.(${miss.slice(i, i + 100).join(',')})`, limit: '300' })
               .then(r => r.forEach(t => {
                 if (t.symbol) SYMBOL_MAP[t.token_address] = t.symbol;
-                if (t.market_cap) SYM_MC[t.token_address] = t.market_cap;
               }))
               .catch(() => {});
           }
         }
-        /* MC dari scan berikutnya (signal_tracks) sebelum render */
-        const addrs = [...new Set(sigs.map(s => s.token_address).filter(Boolean))];
-        loadTrackMC(addrs).finally(() => renderTrack());
+        renderTrack();
       });
     }
     const sig = dataSig();
