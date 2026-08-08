@@ -177,13 +177,22 @@ class UniversePopulator:
                     continue
                 # GMGN risk gate: buang honeypot/rug/alert/top10-konsentrasi
                 ok_gate, flags, gsec = self._gmgn_gate(addr)
+                # MC otoritatif dari GMGN (bukan Blockscout/DexScreener per-pair).
+                # Fallback ke mcap Blockscout bila get_token_info gagal.
+                gmgn_mcap = mcap
+                try:
+                    gi = self.gmgn.get_token_info(addr)
+                    if gi and float(gi.get("market_cap") or 0.0) > 0:
+                        gmgn_mcap = float(gi["market_cap"])
+                except Exception as exc:
+                    logger.debug("gmgn info %s: %s", addr[:10], exc)
                 record = {
                     "token_address": addr,
                     "chain": self.chain,
                     "symbol": c.get("symbol"),
                     "decimals": int(c.get("decimals") or 18),
                     "total_supply": str(c.get("total_supply") or 0),
-                    "market_cap": mcap,
+                    "market_cap": gmgn_mcap,
                     "volume_24h": vol,
                     "holders": holders,
                     "last_seen": now.isoformat(),

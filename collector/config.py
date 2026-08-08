@@ -110,6 +110,23 @@ DW_EXCLUDE_NAME_PARTS = os.getenv("DW_EXCLUDE_NAME_PARTS",
 # Token di luar batas market-cap ini dianggap "mayor"/non-meme (skip).
 DW_MAX_MARKET_CAP_USD = float(os.getenv("DW_MAX_MARKET_CAP_USD", "30000000"))  # $30M max = token kecil/meme
 
+# ==== FILTER MEME UNTUK SIGNAL (SecurityGate — semua mode) ====
+# Token biru-chip/ternama yang secara PRESISI (symbol sama-tentu) bukan meme —
+# ditolak pada jalur signal agar tidak pernah masuk signals/TP1.
+SIGNAL_EXCLUDE_SYMBOLS = os.getenv("SIGNAL_EXCLUDE_SYMBOLS",
+    "WBTC,CBTC,RBTC,WETH,STETH,WSTETH,CBETH,RSETH,WRSETH,RETH,ETHBTC,"
+    "UNI,LINK,AAVE,MKR,CRV,SNX,COMP,"
+    "USDC,USDT,USDE,PYUSD,TUSD,FDUSD,BUSD,GUSD,CGUSD,LUSD,SUSDE,USHAM,USDS,DAI,MTLBILL,TBILL,USDY").split(",")
+# Substring pada symbol yang menandakan wrapped/pegged/non-meme (case-insensitive).
+# Hati-hati: jangan letakkan kata umum (mis. UNI) di sini — itu memakan meme.
+SIGNAL_EXCLUDE_SYMBOL_PARTS = os.getenv("SIGNAL_EXCLUDE_SYMBOL_PARTS",
+    "WRAP,STAKED,STEAK,LEVERAGED,STRATEGY,VAULT").split(",")
+# Substring pada nama yang menandakan token resmi/non-meme (case-insensitive).
+SIGNAL_EXCLUDE_NAME_PARTS = os.getenv("SIGNAL_EXCLUDE_NAME_PARTS",
+    "wrapped bitcoin,wrapped ether,uniswap,chainlink,aave protocol,compound finance,curve finance,stablecoin,pegged usd").split(",")
+# Market-cap maksimum token baru yang boleh menjadi sinyal (meme = mikro-cap).
+SIGNAL_MAX_MARKET_CAP_USD = float(os.getenv("SIGNAL_MAX_MARKET_CAP_USD", "900000"))  # $900K = micro-meme
+
 # ==== GMGN RISK GATE (filter token scam di universe) ====
 DW_GMGN_TOP10_MAX = float(os.getenv("DW_GMGN_TOP10_MAX", "0.50"))      # top10 holder <= 50% (GMGN danger >0.50)
 DW_GMGN_RUG_MAX = float(os.getenv("DW_GMGN_RUG_MAX", "0.30"))          # rug_ratio <= 0.30

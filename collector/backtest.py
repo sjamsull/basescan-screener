@@ -42,10 +42,16 @@ class BacktestTracker:
     # ---------- akses data ----------
 
     def active_signals(self) -> List[Dict]:
+        """Semua sinyal dalam jendela pelacakan (bukan hanya ACTIVE).
+
+        Supaya 'MC saat ini' selalu live: token yang sudah TP1/COMPLETED tetap
+        di-track sampai lewat TRACK_WINDOW_DAYS. Status tidak diubah di sini —
+        evaluasi status tetap hanya untuk ACTIVE (lihat run())."""
+        cutoff = datetime.now(timezone.utc) - timedelta(days=TRACK_WINDOW_DAYS)
         resp = (
             self.storage.client.table("signals")
             .select("*")
-            .eq("status", "ACTIVE")
+            .gt("signal_at", cutoff.isoformat())
             .execute()
         )
         return resp.data or []
@@ -110,8 +116,11 @@ class BacktestTracker:
     def simulate(self, tracks: List[Dict], plan: Dict) -> Dict:
         """Simulasi ladder 3-tranche dari riwayat track.
 
-        Return state akhir + events.Catatan: hanya mengevaluasi bagian yang
-        sudah berjalan (ACTIVE != selesai).
+        BASELINE: skala sumber track (DexScreener) bisa berbeda dari skala
+        GMGN saat sinyal (mis. pair berbeda / totalSupply beda -> mcap bisa
+        selisih 9-10x). Normalis track pertama menjadi skala GMGN-entry agar
+        threshold (tp_ladder_x, invalidation_pct) berlaku benar, dan perubahan
+        nyata dari entry tetap terukur.
         """
         if not tracks:
             return {"state": "NO_DATA"}
@@ -121,6 +130,15 @@ class BacktestTracker:
 
         tp_x = plan["tp_x"]
         inv = 1.0 + plan["inv_pct"] / 100.0  # e.g. 0.82
+        first_mcap = to_float(tracks[0].get("mcap"), 0.0)
+        # Skala sumber lain: kalau track pertama >2x atau <0.5x dari GMGN-entry,
+        # anggap beda sumber/definisi supply → normalize ke entry.
+        scale = 1.0
+        if first_mcap > 0 and entry_mcap > 0:
+            k = first_mcap / entry_mcap
+            if k > 2.0 or k < 0.5:
+                scale = k
+        entry = entry_mcap * scale  # baseline dalam skala track (konsisten sumber)
 
         best_tp = 0
         tp_at = {1: None, 2: None, 3: None}
@@ -129,7 +147,7 @@ class BacktestTracker:
         last_mcap = to_float(last.get("mcap"), 0.0)
         first_ts = tracks[0].get("tracked_at")
         res = {"state": "ACTIVE", "best_tp": 0, "time_to_tp1": None,
-               "pnl": None, "entry": entry_mcap}
+               "pnl": None, "entry": entry, "scale": round(scale, 3)}
 
         # Iterasi berurutan: ketika threshold tersentuh, catat waktu.
         for tr in tracks:
@@ -137,7 +155,7 @@ class BacktestTracker:
             mcap = to_float(tr.get("mcap"), 0.0)
             if mcap <= 0:
                 continue
-            ratio = mcap / entry_mcap
+            ratio = mcap / entry
             for tp_i in (3, 2, 1):
                 if ratio >= tp_x[tp_i - 1] and tp_at[tp_i] is None:
                     tp_at[tp_i] = ts
@@ -149,7 +167,7 @@ class BacktestTracker:
                 inv_at = ts
 
         # Realize
-        exit_ratio = inv if inv_at is not None else (last_mcap / entry_mcap)
+        exit_ratio = inv if inv_at is not None else (last_mcap / entry)
         if best_tp >= 1:
             pnl = (tp_x[0] - 1.0) / 3.0
             if best_tp >= 2:
@@ -171,7 +189,7 @@ class BacktestTracker:
                 res["invalidated_at"] = inv_at
             else:
                 res["state"] = "RUNNING"
-                res["pnl"] = round((last_mcap / entry_mcap - 1.0) * 100.0, 2)
+                res["pnl"] = round((last_mcap / entry - 1.0) * 100.0, 2)
 
         res["tp_at"] = tp_at
         res["best_tp"] = best_tp
@@ -195,51 +213,60 @@ class BacktestTracker:
     def _apply_state(self, addr: str, sim: Dict, states: Dict) -> None:
         """Terapkan state hasil simulate ke tabel signals (dipakai run & reconcile).
 
-        Reconcile perlu me-reset status: sinyal yang sebelumnya INVALIDATED tapi
-        sim-based perjalanan masih hidup (RUNNING/TP1) harus kembali ke ACTIVE."""
+        Setiap branch OLAHKAN SEMUA kolom (reset nilai lama saat token kembali
+        RUNNING/invalid), karena baseline/track bisa berubah → status lama
+        (tp1_at/best_tp/pnl) tidak boleh menggantung."""
         state = sim.get("state", "NO_DATA")
         states[state] = states.get(state, 0) + 1
         best_tp = sim.get("best_tp", 0)
         tt1 = sim.get("time_to_tp1")
-        if best_tp >= 3 or (best_tp >= 2 and state.startswith("TP1") and sim.get("pnl") is not None):
+        at = sim.get("tp_at") or {}
+        pnl = sim.get("pnl")
+        if best_tp >= 3 or (best_tp >= 2 and state.startswith("TP1")):
             self.update_signal(addr, {
                 "status": "COMPLETED",
                 "best_tp": best_tp,
-                "pnl_pct": sim.get("pnl"),
-                "tp1_at": (sim.get("tp_at") or {}).get(1),
-                "tp2_at": (sim.get("tp_at") or {}).get(2),
-                "tp3_at": (sim.get("tp_at") or {}).get(3),
+                "pnl_pct": pnl,
+                "tp1_at": at.get(1),
+                "tp2_at": at.get(2),
+                "tp3_at": at.get(3),
                 "time_to_tp1_h": tt1,
-                "note": f"ladder done best_tp={best_tp} pnl={sim.get('pnl')}%",
+                "note": f"ladder done best_tp={best_tp} pnl={pnl}%",
             })
         elif state == "INVALIDATED":
             self.update_signal(addr, {
                 "status": "INVALIDATED",
-                "pnl_pct": sim.get("pnl"),
-                "exit_price": sim.get("entry") * (1.0 + sim.get("pnl", 0.0) / 100.0)
-                if sim.get("entry") else None,
-                "time_to_tp1_h": tt1,
-                "note": f"invalidation breach pnl={sim.get('pnl')}%",
+                "best_tp": 0,
+                "pnl_pct": pnl,
+                "tp1_at": None,
+                "tp2_at": None,
+                "tp3_at": None,
+                "exit_price": sim.get("entry") * (1.0 + pnl / 100.0) if sim.get("entry") else None,
+                "time_to_tp1_h": None,
+                "note": f"invalidation breach pnl={pnl}%",
             })
         elif state.startswith("TP1"):
-            tp_at = sim.get("tp_at") or {}
             self.update_signal(addr, {
                 "status": "ACTIVE",
-                "best_tp": sim.get("best_tp", 1),
-                "tp1_at": tp_at.get(1),
-                "tp2_at": tp_at.get(2),
-                "tp3_at": tp_at.get(3),
+                "best_tp": max(best_tp, 1),
+                "pnl_pct": pnl,
+                "tp1_at": at.get(1),
+                "tp2_at": at.get(2),
+                "tp3_at": at.get(3),
                 "time_to_tp1_h": tt1,
-                "note": f"tp1 hit t={tt1}h pnl(eval)={sim.get('pnl')}%",
+                "note": f"tp1 hit t={tt1}h pnl(eval)={pnl}%",
             })
         elif state == "RUNNING":
-            fields = {}
-            if sim.get("time_to_tp1") is not None:
-                fields["tp1_at"] = (sim.get("tp_at") or {}).get(1)
-            if sim.get("best_tp", 0) > 0:
-                fields["best_tp"] = sim.get("best_tp")
-                fields["note"] = f"tp hit best={sim.get('best_tp')} (reconcile)"
-            self.update_signal(addr, {"status": "ACTIVE", "time_to_tp1_h": tt1, **fields})
+            self.update_signal(addr, {
+                "status": "ACTIVE",
+                "best_tp": 0,
+                "pnl_pct": None,
+                "tp1_at": None,
+                "tp2_at": None,
+                "tp3_at": None,
+                "time_to_tp1_h": None,
+                "note": None,
+            })
 
     def _is_expired(self, sig: Dict) -> bool:
         """True bila sinyal > TRACK_WINDOW_DAYS tanpa tp1 (boleh di-expire)."""
@@ -299,8 +326,11 @@ class BacktestTracker:
             else:
                 no_quote += 1
 
-        # 2) Evaluasi ulang semua signal ACTIVE (state end)
+        # 2) Evaluasi ulang hanya signal ACTIVE (state end) — token yang sudah
+        #    COMPLETED/INVALIDATED/EXPIRED tidak dibuka lagi ("anggap selesai").
         for sig in sigs:
+            if sig.get("status") != "ACTIVE":
+                continue
             addr = sig["token_address"]
             plan = self._plan_levels(sig)
             if not plan:
@@ -370,7 +400,23 @@ class BacktestTracker:
             addr = sig["token_address"]
             plan = self._plan_levels(sig)
             if not plan:
-                no_plan += 1
+                # Tanpa plan TP (tp_ladder kosong) tidak mungkin valid "kena TP".
+                # Reset status TP historis yang menggantung (COMPLETED/tp1_at/best_tp)
+                # supaya tidak tampil palsu di dashboard.
+                if sig.get("tp1_at") or sig.get("best_tp", 0) > 0 or sig.get("status") == "COMPLETED":
+                    self.update_signal(addr, {
+                        "status": "ACTIVE",
+                        "best_tp": 0,
+                        "pnl_pct": None,
+                        "tp1_at": None,
+                        "tp2_at": None,
+                        "tp3_at": None,
+                        "time_to_tp1_h": None,
+                        "note": "no TP plan — status TP historis di-reset",
+                    })
+                    corrected += 1
+                else:
+                    no_plan += 1
                 continue
             rows = (
                 self.storage.client.table("signal_tracks")

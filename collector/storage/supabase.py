@@ -55,6 +55,7 @@ class SupabaseStorage:
         from collector.processors.plan import compact_plan
         prepared = {
             "plan": compact_plan(rec),
+            "symbol": (rec.get("symbol") or "")[:24] or None,
             "alpha_breakdown": rec.get("alpha_breakdown"),
             "risk_flags": rec.get("risk_flags"),
             "momentum": rec.get("momentum"),
@@ -78,6 +79,21 @@ class SupabaseStorage:
         if not (existing and existing.data):
             from datetime import datetime, timezone
             payload["signal_at"] = datetime.now(timezone.utc).isoformat()
+
+        # Plan tanpa ladder TP (avoid/watch/skip-open/NEUTRAL/CAUTION) TIDAK punya
+        # status TP. Reset kolom TP lama yang menggantung (mis. plan ditimpa scan
+        # baru) supaya tidak tampil palsu di dashboard Track Record.
+        tp_x = (prepared.get("plan") or {}).get("tp_ladder_x") or []
+        if not tp_x:
+            payload.update({
+                "status": "ACTIVE",
+                "best_tp": 0,
+                "pnl_pct": None,
+                "tp1_at": None,
+                "tp2_at": None,
+                "tp3_at": None,
+                "time_to_tp1_h": None,
+            })
 
         try:
             self.client.table("signals").upsert(

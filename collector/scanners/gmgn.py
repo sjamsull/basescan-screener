@@ -124,17 +124,26 @@ class GMGNClient:
         }
 
     def get_token_info(self, address: str) -> Dict:
-        """GET /v1/token/info — metadata + holder count + liquidity."""
+        """GET /v1/token/info — metadata + holder count + liquidity + mcap."""
         param = self._auth()
         params = {**param, "chain": self.chain, "address": address}
         data = get_json(f"{self.base_url}/v1/token/info", headers=self._headers(), params=params)
         d = data.get("data") or {}
+        # GMGN tidak selalu kasih market_cap eksplisit di token/info, tapi selalu
+        # kasih price + circulating_supply -> derive MC (konsisten dengan angka GMGN).
+        mcap = to_float(d.get("market_cap"), 0.0)
+        if mcap <= 0:
+            price = d.get("price") or {}
+            pv = to_float(price.get("price") if isinstance(price, dict) else price, 0.0)
+            cs = to_float(d.get("circulating_supply"), 0.0)
+            mcap = pv * cs
         return {
             "name": d.get("name"),
             "symbol": d.get("symbol"),
             "decimals": d.get("decimals", 18),
             "holder_count": int(d.get("holder_count") or 0),
             "liquidity": to_float(d.get("liquidity"), 0.0),
+            "market_cap": mcap,
             "circulating_supply": to_float(d.get("circulating_supply"), 0.0),
             "creation_timestamp": d.get("creation_timestamp"),
         }

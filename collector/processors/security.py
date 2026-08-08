@@ -61,6 +61,28 @@ class SecurityGate:
         if str(token.get("honeypot", "0")) == "1":
             reasons.append("honeypot")
 
+        # 7. Non-meme: token biru-chip/wrapped/stablecoin DITOLAK di semua mode
+        sym = str(token.get("symbol") or "").upper()
+        if sym:
+            if sym in {s.upper() for s in config.SIGNAL_EXCLUDE_SYMBOLS}:
+                reasons.append(f"non-meme:{sym}")
+            else:
+                for p in config.SIGNAL_EXCLUDE_SYMBOL_PARTS:
+                    if p and p.upper() in sym:
+                        reasons.append(f"non-meme:{sym}")
+                        break
+        if not reasons:
+            nm = str(token.get("name") or "").lower()
+            for p in config.SIGNAL_EXCLUDE_NAME_PARTS:
+                if p and p in nm:
+                    reasons.append(f"non-meme:{token.get('name')}")
+                    break
+
+        # 8. Mikro-cap: meme hanya untuk token kecil (bukan WBTC/LINK/AAVE-grade)
+        mcap = to_float(token.get("market_cap"), 0.0)
+        if mcap > config.SIGNAL_MAX_MARKET_CAP_USD:
+            reasons.append(f"mcap>${config.SIGNAL_MAX_MARKET_CAP_USD/1000:.0f}K")
+
         if reasons:
             return self._reject(";".join(reasons))
 

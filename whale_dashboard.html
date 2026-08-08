@@ -100,35 +100,8 @@
 
   /* ── Stat band (asymmetric) ─────────────── */
   .stat-band {
-    display: grid; grid-template-columns: 1.5fr 2.2fr; gap: 14px;
+    display: grid; grid-template-columns: 1fr; gap: 14px;
     margin-bottom: 22px;
-  }
-  .hero-stat {
-    grid-row: span 1;
-    background: linear-gradient(135deg, var(--surface) 0%, var(--surface-2) 100%);
-    border: 1px solid var(--border); border-radius: 10px;
-    padding: 20px 24px;
-    display: flex; align-items: center; gap: 26px;
-    position: relative; overflow: hidden;
-  }
-  .hero-stat::after {
-    content: ''; position: absolute; right: -40px; top: -40px;
-    width: 160px; height: 160px; border-radius: 50%;
-    background: radial-gradient(circle, rgba(45,212,160,0.12), transparent 70%);
-  }
-  .hero-num {
-    font-family: var(--mono); font-weight: 700; font-size: 3.4rem;
-    line-height: 1; color: var(--green); letter-spacing: -2px;
-  }
-  .hero-meta .k {
-    font-size: 0.64rem; text-transform: uppercase; letter-spacing: 1.2px;
-    color: var(--muted); margin-bottom: 6px;
-  }
-  .hero-meta .d { font-size: 0.78rem; color: var(--text); opacity: 0.85; max-width: 250px; }
-  .hero-gauge { margin-left: auto; display: flex; flex-direction: column; align-items: center; gap: 7px; }
-  .gauge-label {
-    font-family: var(--mono); font-size: 0.54rem; letter-spacing: 1.2px;
-    text-transform: uppercase; color: var(--muted); white-space: nowrap;
   }
   .mini-stat {
     background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
@@ -141,9 +114,46 @@
   .v.c-green { color: var(--green); } .v.c-cyan { color: var(--cyan); }
   .v.c-violet { color: var(--violet); } .v.c-amber { color: var(--amber); }
 
+  /* ── Track record ───────────────────────── */
+  .track-panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px 20px; margin-bottom: 22px;
+  }
+  .track-panel .mute { font-weight: 400; color: var(--muted); font-size: 0.7rem; letter-spacing: 0.4px; }
+  .track-cols {
+    display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px;
+    margin-top: 12px;
+  }
+  .track-cell {
+    display: flex; flex-direction: column; gap: 5px;
+    padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--surface-2); transition: border-color 0.25s;
+    cursor: pointer;
+  }
+  .track-cell:hover { border-color: var(--cyan); }
+  .track-tbl { max-height: 62vh; overflow: auto; margin-top: 14px; border: 1px solid var(--border); border-radius: 8px; }
+  .track-cell b { font-family: var(--mono); font-size: 1.5rem; font-weight: 600; line-height: 1.1; }
+  .track-cell span { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+  .tk {
+    font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.3px;
+    padding: 4px 9px; border-radius: 5px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+    transition: border-color 0.2s, color 0.2s;
+  }
+  .tk:hover { border-color: var(--cyan); color: var(--cyan); }
+  .tk .st { color: var(--muted); font-size: 0.6rem; margin-left: 4px; }
+  .tk-empty { font-size: 0.72rem; color: var(--muted); }
+  @media (max-width: 1100px) { .track-cols { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 620px) { .track-cols { grid-template-columns: 1fr 1fr; } }
+
   /* ── Panel batang whale & akumulasi ────── */
   .chart-panel { display: flex; flex-direction: column; }
-  .chart-panel h3 { margin-bottom: 12px; }
+  .chart-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+  .chart-head .chart-meta {
+    font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.4px;
+    color: var(--muted); white-space: nowrap;
+  }
+  .chart-head .chart-meta b { color: var(--cyan); font-weight: 600; }
   .bchart {
     position: relative; height: 210px; margin: 2px 0 8px;
     background: linear-gradient(180deg, rgba(17,28,38,0.5), rgba(13,22,30,0.2));
@@ -350,6 +360,7 @@
   .mtable td { padding: 4px 6px; border-bottom: 1px solid rgba(27,42,53,0.5); }
   .mtable td.num, .mtable th.num { text-align: right; }
   .ok { color: var(--green); } .bad { color: var(--red); } .warn { color: var(--amber); }
+  .up-c { color: var(--green); font-weight: 600; } .up-c.dn { color: var(--red); }
 
   footer {
     text-align: center; padding: 26px; color: var(--muted);
@@ -381,6 +392,7 @@
     <span class="chip mode" id="mode-chip">MODE: BASE</span>
     <span class="chip live"><i></i>LIVE</span>
     <span class="chip" id="updated">Scan terakhir —</span>
+    <span class="chip" id="next">Scan berikutnya —</span>
   </div>
 </div>
 
@@ -396,31 +408,35 @@
 
   <!-- Stat band -->
   <div class="stat-band">
-    <div class="hero-stat">
-      <div class="hero-num" id="stat-token">0</div>
-      <div class="hero-meta">
-        <div class="k">Token Potensial</div>
-        <div class="d">Token-token potensial</div>
-      </div>
-      <div class="hero-gauge">
-        <span class="gauge-label">rata² akumulasi</span>
-        <div class="gauge" id="hero-gauge">
-          <svg width="76" height="76" viewBox="0 0 76 76">
-            <circle class="track" cx="38" cy="38" r="31"></circle>
-            <circle class="fill" cx="38" cy="38" r="31" stroke="var(--cyan)"></circle>
-          </svg>
-          <div class="gv"><b id="hero-avg">0</b></div>
-        </div>
-      </div>
-    </div>
     <div class="panel chart-panel">
-      <h3>Whale Posisi &amp; Akumulasi</h3>
+      <h3 class="chart-head">
+        <span>Whale Posisi &amp; Akumulasi</span>
+        <span class="chart-meta">
+          <b id="stat-token">0</b> token potensial ·
+          rata² akumulasi <b id="hero-avg">0</b>%
+        </span>
+      </h3>
       <div class="bchart">
         <div class="glines" id="glines"></div>
         <div class="blar" id="blar-area"></div>
       </div>
       <div class="axis-row" id="axis-row"></div>
       <div class="charts-legend" id="charts-legend"></div>
+    </div>
+  </div>
+
+  <!-- Track record (backtest) -->
+  <div class="panel track-panel" id="track-panel">
+    <div class="track-head">
+      <h3>Track Record <span class="mute" id="track-when"></span></h3>
+    </div>
+    <div class="track-cols">
+      <div class="track-cell" onclick="openTrackPage('tp1')" title="Lihat token yang kena TP1"><b id="t-tp1">—</b><span>hit rate TP1 ›</span></div>
+      <div class="track-cell" onclick="openTrackPage('inv')" title="Lihat token yang invalid"><b id="t-inv">—</b><span>invalidasi ›</span></div>
+      <div class="track-cell" onclick="openTrackPage('tp1')" title="Waktu tempuh ke TP1"><b id="t-tt1">—</b><span>waktu ke TP1 ›</span></div>
+      <div class="track-cell" onclick="openTrackPage('eval')" title="Semua sinyal dievaluasi"><b id="t-eval">—</b><span>sinyal dievaluasi ›</span></div>
+      <div class="track-cell" onclick="openTrackPage('pantau')" title="Jam sinyal & jam hit per token"><b id="t-tp123">—</b><span>pantauan TP ›</span></div>
+      <div class="track-cell" onclick="openTrackPage('anom')" title="Anomali waktu ke TP1"><b id="t-anom">—</b><span>anomali TT1 ›</span></div>
     </div>
   </div>
 
@@ -476,9 +492,8 @@ const ago = (ts) => {
   return d?d+"d":(h?h+"h":" "+m+"m");
 };
 const gmgn = (a) => a ? `https://gmgn.ai/${CUR==='robinhood'?'robinhood':'base'}/token/${a.toLowerCase()}` : "#";
+const gmgnChain = (s) => s && s.token_address ? `https://gmgn.ai/${s.chain==='robinhood'?'robinhood':'base'}/token/${s.token_address.toLowerCase()}` : "#";
 const arkm = (a) => a ? `https://arkm.com/explorer/address/${a}` : "#";
-const C = 2 * Math.PI * 31;
-const gaugeColor = v => v >= 70 ? 'var(--green)' : v >= 40 ? 'var(--amber)' : 'var(--red)';
 
 async function q(table, params={}) {
   const u = new URL(SUPABASE_URL + "/rest/v1/" + table + "?");
@@ -499,15 +514,6 @@ const STATUS_META = {
   WATCH:   { cls: 'r-neutral', label: 'WATCH' },
   DUMPED:  { cls: 'r-sell', label: 'DUMPED' },
 };
-function setGauge(el, score) {
-  const fill = el.querySelector('.fill');
-  fill.style.strokeDasharray = C;
-  fill.style.strokeDashoffset = C;
-  fill.style.stroke = gaugeColor(score);
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    fill.style.strokeDashoffset = C * (1 - score / 100);
-  }));
-}
 
 /* ── agregasi per token ── */
 function tokenStats(addr){
@@ -619,7 +625,6 @@ function refreshStats(){
   });
   $('stat-token').textContent = DATA_U.length;
   const avg = DATA_U.length ? Math.round(DATA_U.reduce((s,t) => s + Math.min(100, tokenStats(t.token_address).accum / maxAccum * 100), 0) / DATA_U.length) : 0;
-  setGauge($('hero-gauge'), avg);
   $('hero-avg').textContent = avg;
   $('view-title').textContent = `› TOKEN POTENSIAL · ${CUR==='robinhood'?'ROBINHOOD':'BASE'}`;
   buildChart();
@@ -668,7 +673,6 @@ function buildChart(){
 /* ── render pipeline ── */
 function render(){
   renderTokens(filtered());
-  $('updated').textContent = `Scan terakhir ${new Date().toLocaleTimeString()}`;
 }
 
 /* ── modal ── */
@@ -764,8 +768,191 @@ $('overlay').addEventListener('click', e => { if (e.target === $('overlay')) clo
 window.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
 let lastSig = '';
+let TRACK = null; // tak terpakai lagi: metrik dihitung dari SIGS per chain
+let LAST_SCAN = null;
+let SIGS = [], SYMBOL_MAP = {}, SYM_MC = {}, TRK_MC = {}, SIGS_CHAIN = null;
+const SCAN_INTERVAL_H = 6; // cron: 0 */6 * * *
 function dataSig() {
   return (CUR + '|' + DATA_U.length + '|' + DATA_U.map(t => t.token_address).join(','));
+}
+
+/* Jumlah "Scan terakhir" dari data (max last_seen), bukan jam dinding.
+   "Scan berikutnya" = slot cron jam UTC kelipatan 6 setelah scan terakhir. */
+function slotAfter(ts, everyH) {
+  const d = new Date(ts);
+  d.setUTCSeconds(0, 0);
+  d.setUTCMinutes(0, 0);
+  let h = d.getUTCHours() + 1;
+  while (h % everyH !== 0) h++;
+  d.setUTCHours(h);
+  return d;
+}
+function renderScanChips() {
+  if (!LAST_SCAN) return;
+  const last = new Date(LAST_SCAN);
+  const next = slotAfter(LAST_SCAN, SCAN_INTERVAL_H);
+  const isSameDay = last.toDateString() === new Date().toDateString();
+  const lastTxt = (isSameDay ? '' : last.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) + ' ') +
+    last.toLocaleTimeString('id-ID');
+  const nextTxt = next.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) + ' ' +
+    next.toLocaleTimeString('id-ID');
+  $('updated').textContent = `Scan terakhir ${lastTxt}`;
+  $('next').textContent = `Scan berikutnya ${nextTxt}`;
+}
+
+function renderTrack() {
+  if (!SIGS.length) {
+    $('track-when').textContent = '— belum ada sinyal';
+    return;
+  }
+  /* Defensif: buang token non-meme (biru-chip/wrapped/stablecoin — konsisten
+     dengan SIGNAL_EXCLUDE_* di collector) dari semua metrik/tabel. */
+  const NM_EXACT = ['WBTC','CBTC','RBTC','WETH','STETH','WSTETH','CBETH','RSETH','WRSETH','RETH','ETHBTC','UNI','LINK','AAVE','MKR','CRV','SNX','COMP','USDC','USDT','USDE','PYUSD','TUSD','FDUSD','BUSD','GUSD','CGUSD','LUSD','USDS','DAI','TBILL','USDY','MTLBILL'];
+  const NM_SYM_PART = ['WRAP','STAKED','STEAK','LEVERAGED','STRATEGY','VAULT'];
+  const isNM = (s) => {
+    const sym = String((s.prepared_data && s.prepared_data.symbol) || SYMBOL_MAP[s.token_address] || '').toUpperCase();
+    if (!sym) return false;
+    if (NM_EXACT.includes(sym)) return true;
+    return NM_SYM_PART.some(p => sym.includes(p));
+  };
+  /* Defensif 2: sinyal plan mode='avoid' (non-meme/CAUTION tanpa plan TP) bukan
+     sinyal meme yang masuk radar — buang dari metrik & tabel Track Record. */
+  const isAvoid = (s) => String(((s.prepared_data && s.prepared_data.plan) || {}).mode || '').toLowerCase() === 'avoid';
+  SIGS = SIGS.filter(s => !isNM(s) && !isAvoid(s));
+  /* Metrik dihitung dari sinyal chain aktif (konsisten dengan tabel detail). */
+  const h = (ts) => ts ? new Date(ts).getTime() : 0;
+  const valuable = SIGS.filter(s =>
+    ['COMPLETED','INVALIDATED','EXPIRED'].includes(s.status) || !!s.tp1_at || (s.best_tp||0) > 0);
+  const tt1 = SIGS.map(s => s.time_to_tp1_h).filter(h2 => h2 != null && h2 >= 0);
+  const m = {
+    evaluated: valuable.length,
+    tp1_hits: SIGS.filter(s => !!s.tp1_at).length,
+    tp2_hits: SIGS.filter(s => !!s.tp2_at).length,
+    tp3_hits: SIGS.filter(s => !!s.tp3_at).length,
+    invalidated: SIGS.filter(s => s.status === 'INVALIDATED').length,
+    completed: SIGS.filter(s => s.status === 'COMPLETED').length,
+    expired: SIGS.filter(s => s.status === 'EXPIRED').length,
+    avg_time_to_tp1_h: tt1.length ? Math.round(tt1.reduce((a,b)=>a+b,0) / tt1.length * 100) / 100 : null,
+    n_time_to_tp1: tt1.length,
+    time_to_tp1_anomalies: SIGS.filter(s => s.time_to_tp1_h != null && s.time_to_tp1_h < 0).length,
+  };
+  m.tp1_hit_rate = m.evaluated ? Math.round(m.tp1_hits / m.evaluated * 1000) / 1000 : null;
+  m.invalidation_rate = m.evaluated ? Math.round(m.invalidated / m.evaluated * 1000) / 1000 : null;
+  const pct = (v) => (v == null ? '—' : (v * 100).toFixed(1) + '%');
+  $('t-tp1').textContent = pct(m.tp1_hit_rate);
+  $('t-tp1').style.color = (m.tp1_hit_rate ?? 0) >= 0.5 ? 'var(--green)' : 'var(--amber)';
+  $('t-inv').textContent = pct(m.invalidation_rate);
+  $('t-inv').style.color = (m.invalidation_rate ?? 0) <= 0.4 ? 'var(--green)' : 'var(--red)';
+  $('t-tt1').textContent = m.avg_time_to_tp1_h == null ? '—' : m.avg_time_to_tp1_h.toFixed(1) + 'h';
+  $('t-tt1').title = 'n=' + (m.n_time_to_tp1 ?? 0);
+  $('t-eval').textContent = fmt(m.evaluated, 0);
+  $('t-tp123').textContent = fmt(m.tp1_hits + m.tp2_hits + m.tp3_hits, 0);
+  $('t-anom').textContent = m.time_to_tp1_anomalies + '';
+  $('t-anom').style.color = m.time_to_tp1_anomalies > 0 ? 'var(--red)' : 'var(--green)';
+  $('track-when').textContent = '· ' + CUR.toUpperCase() + ' · ' + SIGS.length + ' sinyal';
+}
+
+/* ── Sub-halaman Track Record (tabel detail per sinyal) ── */
+const planOf = (s) => { const pd = s.prepared_data || {}; return pd.plan || {}; };
+/* MC dari scan berikutnya: ambil track terakhir per token (signal_tracks).
+   distinct via header Prefer (bukan query param). */
+async function loadTrackMC(addrs) {
+  if (!addrs.length) return;
+  TRK_MC = {};
+  const chunks = [];
+  for (let i = 0; i < addrs.length; i += 80) chunks.push(addrs.slice(i, i + 80));
+  try {
+    const rs = await Promise.allSettled(chunks.map(async c => {
+      const u = new URL(SUPABASE_URL + "/rest/v1/signal_tracks?");
+      [['select','token_address,mcap'],['token_address',`in.(${c.join(',')})`],['order','tracked_at.desc'],['limit','1000']].forEach(([k,v]) => u.searchParams.set(k, v));
+      const r = await fetch(u, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, Prefer: 'distinct=on(token_address)' } });
+      if (!r.ok) throw new Error('signal_tracks ' + r.status);
+      return r.json();
+    }));
+    rs.forEach(r => {
+      if (r.status === 'fulfilled') (r.value || []).forEach(t => {
+        if (t.token_address && t.mcap) TRK_MC[t.token_address] = t.mcap;
+      });
+    });
+  } catch (e) { /* non-fatal */ }
+}
+const symOf = (addr) => SYMBOL_MAP[addr] || short(addr);
+const netOf = (s) => (s.chain === 'robinhood' ? 'ROBINHOOD' : 'BASE');
+const fmtAtt = (ts) => ts ? new Date(ts).toLocaleString('id-ID', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
+/* MC saat sinyal: entry_mcap (disimpan baru) atau diderivasi dari zone lama. */
+const mcIn = (s) => {
+  const p = planOf(s);
+  const em = Number(p.entry_mcap || 0);
+  if (em > 0) return fmtUsd(em);
+  const z = p.entry_zone_mcap;
+  if (!z || typeof z !== 'object') return '—';
+  const lo = Number(z.lo || 0), hi = Number(z.hi || 0);
+  if (hi > 0) return fmtUsd(Math.round(hi));          // BUY: hi = current
+  if (lo > 0) return fmtUsd(Math.round((lo + (lo / 0.95)) / 2)); // STRONG BUY: lo = 0.95x
+  return '—';
+};
+
+function tableHTML(cols, rows, rowMapper, empty) {
+  if (!rows.length) return `<div class="empty" style="padding:22px 10px">${empty || 'tidak ada data'}</div>`;
+  return `<div class="track-tbl"><table class="mtable">
+    <thead><tr>${cols.map(c => `<th class="${c.num ? 'num' : ''}">${c.t}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(s => `<tr>${rowMapper(s).map((c, i) => `<td class="${cols[i].num ? 'num' : ''}">${c}</td>`).join('')}</tr>`).join('')}</tbody>
+  </table></div>`;
+}
+
+function openTrackPage(kind) {
+  const scCell = (s) => `<a class="tk" href="${gmgnChain(s)}" target="_blank" rel="noopener" title="${esc(s.token_address)}">${esc(short(s.token_address))}</a>`;
+  const nameCell = (s) => esc(SYMBOL_MAP[s.token_address] || '—');
+  const netCell = (s) => esc(netOf(s));
+  /* MC hasil scan berikutnya (track terakhir) — kalau naik vs MC masuk radar = hijau ▲,
+   turun = merah ▼. Fallback universe bila belum pernah di-track. */
+const mcNow = (s) => {
+  /* Prioritas MC "saat ini": GMGN (dead_token_universe.market_cap, backfill GMGN)
+     dulu — akurat & konsisten dengan angka GMGN. signal_tracks (DexScreener)
+     hanya fallback terakhir karena per-pair bisa beda skala. */
+  const mc = SYM_MC[s.token_address] || TRK_MC[s.token_address];
+  if (!mc) return '—';
+  const txt = fmtUsd(mc);
+  const em = Number((planOf(s).entry_mcap) || 0) || Number((planOf(s).entry_zone_mcap || {}).hi || 0);
+  if (!(em > 0)) return txt;
+  const d = (mc - em) / em;
+  if (d > 0.001) return `<span class="up-c">${txt} ▲</span>`;
+  if (d < -0.001) return `<span class="up-c dn">${txt} ▼</span>`;
+  return txt;
+};
+
+  if (kind === 'tp1') {
+    const cols = [{ t: 'SC' }, { t: 'Token' }, { t: 'Jaringan' }, { t: 'MC masuk radar' }, { t: 'MC saat ini', num: true }];
+    const rows = SIGS.filter(s => s.tp1_at).sort((a,b) => (a.time_to_tp1_h??1e9) - (b.time_to_tp1_h??1e9));
+    openModal('TP1 · token yang kena TP1 (' + rows.length + ')',
+      tableHTML(cols, rows, s => [scCell(s), nameCell(s), netCell(s), mcIn(s), mcNow(s)], 'Belum ada yang kena TP1.'));
+  } else if (kind === 'inv') {
+    const cols = [{ t: 'SC' }, { t: 'Token' }, { t: 'Jaringan' }, { t: 'MC masuk radar' }, { t: 'MC saat ini', num: true }, { t: 'Status' }];
+    const rows = SIGS.filter(s => s.status === 'INVALIDATED').sort((a,b) => (b.signal_at||'').localeCompare(a.signal_at||''));
+    openModal('INVALIDATED · token yang invalid (' + rows.length + ')',
+      tableHTML(cols, rows, s => [scCell(s), nameCell(s), netCell(s), mcIn(s), mcNow(s), esc(s.status || '—')], 'Tidak ada sinyal invalid.'));
+  } else if (kind === 'pantau') {
+    const cols = [{ t: 'SC' }, { t: 'Token' }, { t: 'Jaringan' }, { t: 'Jam signal' }, { t: 'Jam hit TP1' }, { t: 'Jam hit TP2' }, { t: 'Jam hit TP3' }];
+    const rows = SIGS.filter(s => s.tp1_at || s.tp2_at || s.tp3_at || s.status === 'ACTIVE').sort((a,b) => (b.signal_at||'').localeCompare(a.signal_at||''));
+    openModal('Pantauan TP · jam sinyal & jam hit (' + rows.length + ')',
+      tableHTML(cols, rows, s => [
+        scCell(s), nameCell(s), netCell(s),
+        fmtAtt(s.signal_at),
+        s.tp1_at ? fmtAtt(s.tp1_at) : '—',
+        'pantau manual',
+        'pantau manual'
+      ], 'Belum ada sinyal terpantau.'));
+  } else if (kind === 'eval') {
+    const cols = [{ t: 'SC' }, { t: 'Token' }, { t: 'Jaringan' }, { t: 'Evaluasi' }];
+    const rows = SIGS.slice().sort((a,b) => (b.signal_at||'').localeCompare(a.signal_at||''));
+    openModal('Sinyal dievaluasi (' + rows.length + ')',
+      tableHTML(cols, rows, s => [scCell(s), nameCell(s), netCell(s), esc(s.verdict || s.status || '—')], 'Belum ada sinyal.'));
+  } else if (kind === 'anom') {
+    const cols = [{ t: 'SC' }, { t: 'Token' }, { t: 'Jaringan' }, { t: 'time_to_tp1', num: true }, { t: 'Status' }];
+    const rows = SIGS.filter(s => (s.time_to_tp1_h ?? 0) < 0 || (s.time_to_tp1_h == null && s.tp1_at)).sort((a,b) => (b.signal_at||'').localeCompare(a.signal_at||''));
+    openModal('Anomali waktu ke TP1 (' + rows.length + ')',
+      tableHTML(cols, rows, s => [scCell(s), nameCell(s), netCell(s), s.time_to_tp1_h == null ? '—' : s.time_to_tp1_h, esc(s.status || '—')], 'Tidak ada token anomali.'));
+  }
 }
 
 async function load(){
@@ -782,11 +969,46 @@ async function load(){
     DATA_U = ur;
     POS_MAP = {};
     wr.forEach(p => { (POS_MAP[p.token_address] = POS_MAP[p.token_address] || []).push(p); });
-    const sig = dataSig();
-    if (sig === lastSig) {
-      $('updated').textContent = `Scan terakhir ${new Date().toLocaleTimeString()}`;
-      return;
+    /* waktu scan statis = last_seen tertinggi (terbesar) dari universe chain ini */
+    const mx = ur.reduce((a, t) => (t.last_seen && (!a || new Date(t.last_seen) > new Date(a)) ? t.last_seen : a), null);
+    if (mx) LAST_SCAN = mx;
+    renderScanChips();
+    if (!SIGS.length || SIGS_CHAIN !== CUR) {
+      SIGS_CHAIN = CUR;
+      Promise.allSettled([
+        q('signals', { select: 'token_address,chain,verdict,status,best_tp,tp1_at,tp2_at,tp3_at,signal_at,pnl_pct,time_to_tp1_h,prepared_data', chain: `eq.${CUR}`, order: 'signal_at.desc', limit: '500' }),
+        q('dead_token_universe', { select: 'token_address,symbol,market_cap', chain: `eq.${CUR}`, limit: '1000' })
+      ]).then(([sr, su]) => {
+        const sigs = sr.status === 'fulfilled' ? sr.value : [];
+        SIGS = sigs;
+        /* symbol utama dari signals.prepared_data.symbol (backfill sudah diisi) */
+        sigs.forEach(s => {
+          const pd = s.prepared_data || {};
+          if ((pd.symbol || '').trim()) SYMBOL_MAP[s.token_address] = pd.symbol;
+        });
+        if (su.status === 'fulfilled') su.value.forEach(t => {
+          if (!SYMBOL_MAP[t.token_address] && t.symbol) SYMBOL_MAP[t.token_address] = t.symbol;
+          if (t.market_cap) SYM_MC[t.token_address] = t.market_cap;
+        });
+        /* token sinyal yang belum ada symbol di universe → query per address langsung */
+        const miss = [...new Set(sigs.map(s => s.token_address).filter(a => a && !SYMBOL_MAP[a]))];
+        if (miss.length) {
+          for (let i = 0; i < miss.length; i += 100) {
+            q('dead_token_universe', { select: 'token_address,symbol,market_cap', chain: `eq.${CUR}`, token_address: `in.(${miss.slice(i, i + 100).join(',')})`, limit: '300' })
+              .then(r => r.forEach(t => {
+                if (t.symbol) SYMBOL_MAP[t.token_address] = t.symbol;
+                if (t.market_cap) SYM_MC[t.token_address] = t.market_cap;
+              }))
+              .catch(() => {});
+          }
+        }
+        /* MC dari scan berikutnya (signal_tracks) sebelum render */
+        const addrs = [...new Set(sigs.map(s => s.token_address).filter(Boolean))];
+        loadTrackMC(addrs).finally(() => renderTrack());
+      });
     }
+    const sig = dataSig();
+    if (sig === lastSig) return;
     lastSig = sig;
     refreshStats();
     render();

@@ -78,6 +78,7 @@ def compact_plan(token: Dict) -> Dict:
     plan = token.get("plan") or {}
     return {
         "mode": plan.get("mode"),
+        "entry_mcap": plan.get("current_mcap"),
         "entry_zone_mcap": plan.get("entry_zone_mcap"),
         "invalidation_mcap": plan.get("invalidation_mcap"),
         "invalidation_pct": plan.get("invalidation_pct"),
