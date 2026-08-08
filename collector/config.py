@@ -11,17 +11,16 @@ class ChainConfig:
     name: str
     gmgn_id: str
     goplus_id: int
-    gecko_network: str
     explorer_chainid: int  # None = explorer free tier tidak tersedia, di-skip
 
 
 CHAINS: Dict[str, ChainConfig] = {
-    "base": ChainConfig("Base", "base", 8453, "base", 8453),
-    "robinhood": ChainConfig("Robinhood", "robinhood", 4663, "robinhood", None),
-    "arbitrum": ChainConfig("Arbitrum", "arbitrum", 42161, "arbitrum", 42161),
-    "eth": ChainConfig("Ethereum", "eth", 1, "ethereum", 1),
-    "bsc": ChainConfig("BSC", "bsc", 56, "bsc", 56),
-    "sol": ChainConfig("Solana", "sol", 101, "solana", None),
+    "base": ChainConfig("Base", "base", 8453, 8453),
+    "robinhood": ChainConfig("Robinhood", "robinhood", 4663, None),
+    "arbitrum": ChainConfig("Arbitrum", "arbitrum", 42161, 42161),
+    "eth": ChainConfig("Ethereum", "eth", 1, 1),
+    "bsc": ChainConfig("BSC", "bsc", 56, 56),
+    "sol": ChainConfig("Solana", "sol", 101, None),
 }
 
 # Explorer free tier (verified 2026): hanya chainid 1 (ETH) & 42161 (Arbitrum).
@@ -69,7 +68,6 @@ DEXS_MAX_TX_PER_HOUR = float(os.getenv("DEXS_MAX_TX_PER_HOUR", "10"))
 GMGN_API_KEY = os.getenv("GMGN_API_KEY", "")
 ETHERSCAN_API_KEY = os.getenv("ETHERSCAN_API_KEY", "")
 GOPLUS_API_KEY = os.getenv("GOPLUS_API_KEY", "")
-COINGECKO_API_KEY = os.getenv("COINGECKO_API_KEY", "")
 BLOCKSCOUT_API_KEY = os.getenv("BLOCKSCOUT_API_KEY", "")
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")

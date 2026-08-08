@@ -39,11 +39,10 @@ HAL-HAL YANG TIDAK BOLEH DITOLAK / DIPOTONG
 
 4. Liquidity Floor
    - Token dengan likuiditas < $5k (accumulation) atau < $1k (dead-whale) ditolak.
-   - Likuiditas jomplang (GMGN vs Gecko mismatch) di-penalty +20 risk.
 
 5. Wash-Trading Detection
-   - Volume GMGN vs on-chain Gecko ratio ≥3x → penalty +15.
-   - DexScreener avg trade < $50 & ≤10 tx/h → penalty +25.
+   - Flag wash-trading GMGN (is_wash_trading) → penalty +25.
+   - GMGN avg trade < $50 & ≤10 swap/jam → penalty +25.
    - Same-second raw-tx (Etherscan/Basescan) → penalty +20 per flag.
 
 6. Momentum Confirmation

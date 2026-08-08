@@ -6,7 +6,7 @@ dan honest backtest. Data persisten di Supabase, collector berjalan via GitHub A
 ## Arsitektur
 
 ```
-GMGN / GoPlus / Gecko / DexScreener / Explorer(Etherscan|Basescan|...)
+GMGN / GoPlus / Explorer(Etherscan|Basescan|...)  — MC/harga/volume dari GMGN (satu sumber)
         │
         ▼
 collector/  (pipeline Python)
@@ -44,7 +44,7 @@ python -m collector.main --dry                                          # tanpa 
 - Bonus accumulation HANYA jika buyer pattern nyata (gradual/cluster/single-entry) DAN
   price_change_1h < 20%. "Aman tapi datar" = skor tetap rendah.
 - Honeypot = risk 100 = reject. Owner tidak renounce = +10. Sell tax >10% = +25.
-- Wash-trading: volume GMGN vs Gecko ≥3x = +15; DexScreener avg trade <$50 & ≤10 tx/h = +25;
+- Wash-trading: flag GMGN is_wash_trading = +25; GMGN avg trade <$50 & ≤10 swap/jam = +25;
   same-second raw tx = +20/flag (max 3 flag).
 - Liquidity floor: $5k (accumulation), $1k (dead-whale).
 - API gagal = ERROR tercatat, bukan silent-fallback ke mock.
@@ -52,7 +52,7 @@ python -m collector.main --dry                                          # tanpa 
 ## GitHub Actions (cron tiap jam)
 
 Set secrets di repo: `GMGN_API_KEY`, `ETHERSCAN_API_KEY`, `GOPLUS_API_KEY`,
-`COINGECKO_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`.
+`SUPABASE_URL`, `SUPABASE_SERVICE_KEY`.
 Optional repo variable: `CHAIN_WEIGHT_ORDER`.
 
 ## Supabase — tabel yang dibutuhkan

@@ -15,8 +15,6 @@ token-screener/
 │   ├── scanners/
 │   │   ├── gmgn.py
 │   │   ├── goplus.py
-│   │   ├── gecko.py
-│   │   ├── dexscreener.py
 │   │   └── etherscan.py
 │   ├── processors/
 │   │   ├── screener.py
@@ -71,15 +69,14 @@ class ChainConfig:
     name: str
     gmgn_id: str
     goplus_id: int
-    gecko_network: str
-    dexscreener_chain: str
+    explorer_chainid: int
 
 CHAINS: Dict[str, ChainConfig] = {
-    "base": ChainConfig("Base", "base", 8453, "base", "base"),
-    "robinhood": ChainConfig("Robinhood", "robinhood", 4663, "robinhood", "base"),
-    "eth": ChainConfig("Ethereum", "eth", 1, "ethereum", "ethereum"),
-    "bsc": ChainConfig("BSC", "bsc", 56, "bsc", "bsc"),
-    "sol": ChainConfig("Solana", "sol", 101, "solana", "solana")
+    "base": ChainConfig("Base", "base", 8453, 8453),
+    "robinhood": ChainConfig("Robinhood", "robinhood", 4663, None),
+    "eth": ChainConfig("Ethereum", "eth", 1, 1),
+    "bsc": ChainConfig("BSC", "bsc", 56, 56),
+    "sol": ChainConfig("Solana", "sol", 101, None)
 }
 
 # Thresholds
@@ -429,7 +426,7 @@ supabase>=2.0.0
 ## 🔄 Data Flow
 
 ```
-SCRAPERS (GMGN, GoPlus, Gecko, DexScreener, Etherscan)
+SCRAPERS (GMGN, GoPlus, Etherscan)
     ↓
 PROCESSORS (Screener → Deepdive → Risk → Scoring)
     ↓

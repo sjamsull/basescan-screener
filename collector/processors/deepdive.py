@@ -1,12 +1,11 @@
 """Deep-dive enrichment — hanya dipanggil untuk token yang lolos Layer 1.
 
-Biaya API mahal (Gecko + GMGN + Explorer). Tidak dipakai untuk semua token.
+Biaya API mahal (GMGN + Explorer). Tidak dipakai untuk semua token.
 """
 
 import logging
-from typing import Dict, Optional
+from typing import Dict
 
-from collector.scanners.gecko import GeckoClient
 from collector.scanners.gmgn import GMGNClient
 from collector.scanners.etherscan import ExplorerClient
 
@@ -14,19 +13,13 @@ logger = logging.getLogger(__name__)
 
 
 class DeepDive:
-    def __init__(self):
-        self.gecko = GeckoClient()
-
     def enrich(self, token: Dict, chain_cfg, security: Dict) -> Dict:
-        """Isi gecko_*, gmgn_*, explorer_* ke dalam token. Tanpa throw."""
+        """Isi gmgn_*, explorer_* ke dalam token (sumber data = GMGN). Tanpa throw."""
         out = dict(token)
         addr = token.get("address", "")
         gmgn = GMGNClient(chain_cfg.gmgn_id)
 
-        gecko = self.gecko.price_volume(addr, chain_cfg.gecko_network)
-        out["gecko"] = {k: v for k, v in gecko.items() if k != "error"}
-
-        # Harga/likuiditas dari GMGN (satu-satunya sumber — bukan DexScreener).
+        # Harga/likuiditas/MC dari GMGN (satu-satunya sumber).
         try:
             out["gmgn"] = gmgn.get_token_info(addr)
         except Exception as exc:
@@ -41,13 +34,10 @@ class DeepDive:
             out["same_second_flags"] = []
             out["explorer_skip"] = True if not chain_cfg.explorer_chainid else False
 
-        # Fee/MC ratio — dari GMGN kalau ada, bukan tambahan API call
-        mcap = token.get("market_cap") or (out.get("gmgn") or {}).get("market_cap") or (gecko.get("market_cap") or 0)
+        # Fee/MC ratio — dari GMGN market_cap (bukan sumber lain).
+        mcap = to_float_safe(token.get("market_cap")) or to_float_safe((out.get("gmgn") or {}).get("market_cap"))
         fees = token.get("fees") or token.get("fee_24h") or 0
-        if mcap:
-            out["fee_mc_ratio"] = to_float_safe(fees) / to_float_safe(mcap)
-        else:
-            out["fee_mc_ratio"] = 0.0
+        out["fee_mc_ratio"] = to_float_safe(fees) / mcap if mcap else 0.0
 
         return out
 

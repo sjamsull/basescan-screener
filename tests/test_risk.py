@@ -11,7 +11,6 @@ def token(**over):
         "top_10_holder_rate": 0.50,
         "top10_holder_rate": 0.0,
         "volume_24h": 100_000.0,
-        "gecko": {"total_volume": 50_000.0},
         "gmgn": {"volume_24h": 100_000.0, "swaps": 100, "price_usd": 1.0},
         "bundler_rate": 0.0,
         "entrapment_ratio": 0.0,
@@ -40,7 +39,7 @@ class TestHoneypot:
         assert r["flags"] == ["honeypot"]
 
     def test_honeypot_shortcircuit_ignores_others(self):
-        r = engine.calculate(token(volume_24h=0, gecko={"total_volume": 0}), sec(is_honeypot=True))
+        r = engine.calculate(token(volume_24h=0, gmgn={"volume_24h": 0, "swaps": 0}), sec(is_honeypot=True))
         assert r["score"] == 100.0
         assert len(r["flags"]) == 1
 
@@ -97,17 +96,17 @@ class TestLaunchpadStructure:
 
 
 class TestWashTrading:
-    def test_volume_ratio_3x(self):
-        r = engine.calculate(token(volume_24h=300_000.0, gecko={"total_volume": 100_000.0}), sec())
-        assert any("vol_ratio" in f for f in r["flags"])
+    def test_wash_flag_gmgn(self):
+        r = engine.calculate(token(is_wash_trading=True), sec())
+        assert "wash_trading" in r["flags"]
 
-    def test_volume_ratio_normal_tidak_kena(self):
-        r = engine.calculate(token(volume_24h=100_000.0, gecko={"total_volume": 80_000.0}), sec())
-        assert not any("vol_ratio" in f for f in r["flags"])
+    def test_wash_flag_off_tidak_kena(self):
+        r = engine.calculate(token(is_wash_trading=False), sec())
+        assert not any("wash_trading" in f for f in r["flags"])
 
     def test_gmgn_avg_trade_kecil_dan_sepi(self):
         # avg_trade = volume/swaps = 10000/240 ≈ $41.7 (< $50), 10 swap/jam
-        r = engine.calculate(token(gmgn={"volume_24h": 10_000.0, "swaps": 240, "price_usd": 1.0}), sec())
+        r = engine.calculate(token(volume_24h=10_000.0, gmgn={"volume_24h": 10_000.0, "swaps": 240, "price_usd": 1.0}), sec())
         assert any("avg_trade" in f for f in r["flags"])
 
     def test_same_second_capped_60(self):
