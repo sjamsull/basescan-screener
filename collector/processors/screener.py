@@ -3,7 +3,7 @@
 Alur per token:
 1. SecurityGate (filter murah: age/liq/top10/tax)        -> buang sampah cepat
 2. GoPlus security (survivor-only, hemat rate-limit)    -> anti-rug/counter
-3. DeepDive enrich (Gecko/DexScreener/Explorer)          -> survivor-only
+3. DeepDive enrich (Gecko/GMGN/Explorer)          -> survivor-only
 4. RiskEngine + TokenScorer                              -> skor & verdict
 5. Record hasil atau reject permanen
 """

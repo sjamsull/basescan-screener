@@ -38,7 +38,7 @@ class SecurityGate:
         if age_hours > 0 and age_hours < self.min_age_days * 24:
             reasons.append(f"age<{self.min_age_days}d")
 
-        # 3. Likuiditas (dari DexScreener kalau ada, fallback GMGN liquidity)
+        # 3. Likuiditas (dari feed, fallback GMGN liquidity)
         liq = 0.0
         if pair:
             liq = to_float(pair.get("liquidity_usd"), 0.0)

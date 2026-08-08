@@ -8,8 +8,8 @@ Metrik (semua replikable):
   - time_to_tp1  : jam dari scan sampai threshold pertama tersentuh
   - pnl (ladder 1/3): exit bertingkat TP1(1/3), TP2(1/3), TP3(1/3) + stop terakhir
 
-Basis: perbandingan rasio terhadap observasi pertama DexScreener (entry baseline)
- — konsisten sumber, tidak mencampur mcap GMGN vs DexScreener.
+Basis: perbandingan rasio terhadap MC GMGN saat sinyal (entry baseline)
+ — konsisten sumber GMGN dari awal hingga akhir.
 """
 
 import argparse
@@ -123,11 +123,9 @@ class BacktestTracker:
     def simulate(self, tracks: List[Dict], plan: Dict) -> Dict:
         """Simulasi ladder 3-tranche dari riwayat track.
 
-        BASELINE: skala sumber track (DexScreener) bisa berbeda dari skala
-        GMGN saat sinyal (mis. pair berbeda / totalSupply beda -> mcap bisa
-        selisih 9-10x). Normalis track pertama menjadi skala GMGN-entry agar
-        threshold (tp_ladder_x, invalidation_pct) berlaku benar, dan perubahan
-        nyata dari entry tetap terukur.
+        Semua track & entry kini dari GMGN (satu sumber). Normalis track pertama
+        ke skala GMGN-entry hanya sebagai jaring pengaman bila supply berubah
+        antar-run (mcap sellisih >2x), agar threshold tetap berlaku benar.
         """
         if not tracks:
             return {"state": "NO_DATA"}

@@ -12,7 +12,7 @@ def token(**over):
         "top10_holder_rate": 0.0,
         "volume_24h": 100_000.0,
         "gecko": {"total_volume": 50_000.0},
-        "dexscreener": {"avg_trade_usd": 200.0, "txns_24h": 2400.0},
+        "gmgn": {"volume_24h": 100_000.0, "swaps": 100, "price_usd": 1.0},
         "bundler_rate": 0.0,
         "entrapment_ratio": 0.0,
         "rug_ratio": 0.0,

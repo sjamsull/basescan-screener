@@ -12,17 +12,16 @@ class ChainConfig:
     gmgn_id: str
     goplus_id: int
     gecko_network: str
-    dexscreener_chain: str
     explorer_chainid: int  # None = explorer free tier tidak tersedia, di-skip
 
 
 CHAINS: Dict[str, ChainConfig] = {
-    "base": ChainConfig("Base", "base", 8453, "base", "base", 8453),
-    "robinhood": ChainConfig("Robinhood", "robinhood", 4663, "robinhood", "base", None),
-    "arbitrum": ChainConfig("Arbitrum", "arbitrum", 42161, "arbitrum", "arbitrum", 42161),
-    "eth": ChainConfig("Ethereum", "eth", 1, "ethereum", "ethereum", 1),
-    "bsc": ChainConfig("BSC", "bsc", 56, "bsc", "bsc", 56),
-    "sol": ChainConfig("Solana", "sol", 101, "solana", "solana", None),
+    "base": ChainConfig("Base", "base", 8453, "base", 8453),
+    "robinhood": ChainConfig("Robinhood", "robinhood", 4663, "robinhood", None),
+    "arbitrum": ChainConfig("Arbitrum", "arbitrum", 42161, "arbitrum", 42161),
+    "eth": ChainConfig("Ethereum", "eth", 1, "ethereum", 1),
+    "bsc": ChainConfig("BSC", "bsc", 56, "bsc", 56),
+    "sol": ChainConfig("Solana", "sol", 101, "solana", None),
 }
 
 # Explorer free tier (verified 2026): hanya chainid 1 (ETH) & 42161 (Arbitrum).

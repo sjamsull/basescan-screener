@@ -1,6 +1,6 @@
 """Deep-dive enrichment — hanya dipanggil untuk token yang lolos Layer 1.
 
-Biaya API mahal (Gecko + DexScreener + Explorer). Tidak dipakai untuk semua token.
+Biaya API mahal (Gecko + GMGN + Explorer). Tidak dipakai untuk semua token.
 """
 
 import logging

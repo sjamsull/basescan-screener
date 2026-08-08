@@ -18,7 +18,7 @@ class RiskEngine:
     - Top10 >80% / >65%               -> +20 / +10
     - Liq <$50k / <$100k              -> +20 / +10
     - Volume GMGN vs Gecko mismatch   -> +15 (ratio >= 3x, tanpa Gecko data skip)
-    - DexScreener avg trade <$50 & <=10 tx/h -> +25
+    - GMGN avg trade <$50 & <=10 swap/jam -> +25
     - Same-second raw-tx flag         -> +20 per flag (max +60)
     """
 

@@ -49,7 +49,7 @@ network = Base. Jadi kita pakai flow *saved query*:
 2. Setelah **Save**, salin `query_id` dari URL (https://dune.com/queries/<ID>)
    ke env `DUNE_DEAD_TOKENS_QUERY_ID`.
 3. populate_universe memakai query_id ini via SDK; kalau tidak ada, fallback ke
-   Blockscout/DexScreener (signals seed) — sistem tetap berjalan.
+   Blockscout/GMGN (signals seed) — sistem tetap berjalan.
 
 API key via env DUNE_API_KEY.
 """
