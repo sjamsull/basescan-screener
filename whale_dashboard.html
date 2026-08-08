@@ -879,15 +879,16 @@ async function loadTrackMC(addrs) {
 const symOf = (addr) => SYMBOL_MAP[addr] || short(addr);
 const netOf = (s) => (s.chain === 'robinhood' ? 'ROBINHOOD' : 'BASE');
 const fmtAtt = (ts) => ts ? new Date(ts).toLocaleString('id-ID', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
-/* MC saat sinyal: entry_mcap (disimpan baru) atau diderivasi dari zone lama. */
+/* MC saat sinyal (GMGN) — dari entry_zone_mcap (dibuat build_plan dari GMGN
+   current saat sinyal) untuk tier buy/probe. Token tanpa plan entry (watch/
+   avoid/NEUTRAL/CAUTION) bukan entry cycle -> tampil '—', bukan backfill
+   DexScreener yang per-pair meleset. */
 const mcIn = (s) => {
   const p = planOf(s);
-  const em = Number(p.entry_mcap || 0);
-  if (em > 0) return fmtUsd(em);
   const z = p.entry_zone_mcap;
   if (!z || typeof z !== 'object') return '—';
-  const lo = Number(z.lo || 0), hi = Number(z.hi || 0);
-  if (hi > 0) return fmtUsd(Math.round(hi));          // BUY: hi = current
+  const hi = Number(z.hi || 0), lo = Number(z.lo || 0);
+  if (hi > 0) return fmtUsd(Math.round(hi));          // BUY: hi = current GMGN
   if (lo > 0) return fmtUsd(Math.round((lo + (lo / 0.95)) / 2)); // STRONG BUY: lo = 0.95x
   return '—';
 };
@@ -907,10 +908,9 @@ function openTrackPage(kind) {
   /* MC hasil scan berikutnya (track terakhir) — kalau naik vs MC masuk radar = hijau ▲,
    turun = merah ▼. Fallback universe bila belum pernah di-track. */
 const mcNow = (s) => {
-  /* Prioritas MC "saat ini": GMGN (dead_token_universe.market_cap, backfill GMGN)
-     dulu — akurat & konsisten dengan angka GMGN. signal_tracks (DexScreener)
-     hanya fallback terakhir karena per-pair bisa beda skala. */
-  const mc = SYM_MC[s.token_address] || TRK_MC[s.token_address];
+  /* MC "saat ini" = GMGN saja (dead_token_universe.market_cap backfill GMGN).
+     signal_tracks/DexScreener tidak dipakai lagi — per-pair meleset drastis. */
+  const mc = SYM_MC[s.token_address];
   if (!mc) return '—';
   const txt = fmtUsd(mc);
   const em = Number((planOf(s).entry_mcap) || 0) || Number((planOf(s).entry_zone_mcap || {}).hi || 0);

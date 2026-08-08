@@ -19,7 +19,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional
 
 from collector import config
-from collector.scanners.dexscreener import DexScreenerClient
+from collector.scanners.gmgn import GMGNClient
 from collector.storage.supabase import SupabaseStorage
 from collector.utils.helpers import to_float
 
@@ -34,7 +34,7 @@ class BacktestTracker:
 
     def __init__(self, chain: Optional[str] = None):
         self.storage = SupabaseStorage() if SupabaseStorage.configured() else None
-        self.dexk = DexScreenerClient()
+        self.gmgn = GMGNClient("base")
         self.chain = chain
         if self.storage is None:
             raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_KEY required")
@@ -101,15 +101,22 @@ class BacktestTracker:
         }
 
     def fetch_quote(self, chain: str, address: str) -> Optional[Dict]:
+        """MC/price/liquidity dari GMGN (satu-satunya sumber — bukan DexScreener).
+
+        DexScreener memberi MC beda-beda per pair (meleset 2-10x), sehingga
+        timeline signal_tracks tidak konsisten. GMGN get_token_info memberi
+        market_cap tunggal (derivasi price*circulating_supply)."""
         try:
-            dex_chain = config.CHAINS.get(chain)
-            pair = self.dexk.get_pair(dex_chain.dexscreener_chain, address) if dex_chain else None
-            if not pair:
+            if self.gmgn.chain != chain:
+                self.gmgn = GMGNClient(chain)
+            info = self.gmgn.get_token_info(address)
+            if not info or info.get("market_cap", 0.0) <= 0:
                 return None
-            q = self.dexk.extract(pair)
-            if q.get("error") or q.get("market_cap", 0.0) <= 0:
-                return None
-            return q
+            return {
+                "market_cap": info["market_cap"],
+                "price_usd": info.get("price_usd", 0.0),
+                "liquidity_usd": info.get("liquidity", 0.0),
+            }
         except Exception:
             return None
 

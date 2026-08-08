@@ -132,10 +132,10 @@ class RiskEngine:
     def _wash_trade_penalty(self, token: Dict, flags: list[str]) -> float:
         penalty = 0.0
         gecko = token.get("gecko") or {}
-        dex = token.get("dexscreener") or {}
+        gmgn = token.get("gmgn") or {}
 
         # 1. Volume GMGN vs on-chain Gecko >= 3x
-        gmgn_vol = to_float(token.get("volume_24h"), to_float(token.get("volume"), 0.0))
+        gmgn_vol = to_float(token.get("volume_24h"), to_float(token.get("volume"), 0.0)) or to_float(gmgn.get("volume_24h"), 0.0)
         gecko_vol = to_float(gecko.get("total_volume"), 0.0)
         if gmgn_vol > 0 and gecko_vol > 0:
             ratio = gmgn_vol / gecko_vol
@@ -143,12 +143,15 @@ class RiskEngine:
                 penalty += 15
                 flags.append(f"vol_ratio_gmgn_gecko={ratio:.1f}x")
 
-        # 2. DexScreener avg trade < $50 & tx <= 10/jam
-        avg_trade = to_float(dex.get("avg_trade_usd"), 0.0)
-        tx_hour = to_float(dex.get("txns_24h"), 0.0) / 24.0
-        if dex.get("error") is None and 0 < avg_trade < config.DEXS_MIN_AVG_TRADE and tx_hour <= config.DEXS_MAX_TX_PER_HOUR:
-            penalty += 25
-            flags.append(f"dex_avg_trade=${avg_trade:.0f}")
+        # 2. Wash-trade: GMGN avg trade < $50 & <=10 swap/jam (sumber GMGN,
+        #    bukan DexScreener per-pair). avg_trade = volume / jumlah swap.
+        swaps = int(gmgn.get("swaps") or 0)
+        if gmgn.get("error") is None and swaps > 0:
+            avg_trade = to_float(gmgn.get("volume_24h"), 0.0) / swaps
+            tx_hour = swaps / 24.0
+            if 0 < avg_trade < config.DEXS_MIN_AVG_TRADE and tx_hour <= config.DEXS_MAX_TX_PER_HOUR:
+                penalty += 25
+                flags.append(f"avg_trade=${avg_trade:.0f}")
 
         # 3. Same-second raw-tx, +20 per flag max 3
         same_second = token.get("same_second_flags") or []

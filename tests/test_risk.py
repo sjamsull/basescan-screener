@@ -105,9 +105,10 @@ class TestWashTrading:
         r = engine.calculate(token(volume_24h=100_000.0, gecko={"total_volume": 80_000.0}), sec())
         assert not any("vol_ratio" in f for f in r["flags"])
 
-    def test_dex_avg_trade_kecil_dan_sepi(self):
-        r = engine.calculate(token(dexscreener={"avg_trade_usd": 30.0, "txns_24h": 100.0}), sec())
-        assert any("dex_avg_trade" in f for f in r["flags"])
+    def test_gmgn_avg_trade_kecil_dan_sepi(self):
+        # avg_trade = volume/swaps = 10000/240 ≈ $41.7 (< $50), 10 swap/jam
+        r = engine.calculate(token(gmgn={"volume_24h": 10_000.0, "swaps": 240, "price_usd": 1.0}), sec())
+        assert any("avg_trade" in f for f in r["flags"])
 
     def test_same_second_capped_60(self):
         r = engine.calculate(token(same_second_flags=["a", "b", "c", "d", "e"]), sec())
