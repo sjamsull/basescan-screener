@@ -532,6 +532,17 @@ function parseSec(t){
   if (!t || !t.security_json) return null;
   try { return JSON.parse(t.security_json); } catch(e) { return null; }
 }
+function parseVerrow(t){
+  if (!t || !t.verrow_json) return null;
+  try { return JSON.parse(t.verrow_json); } catch(e) { return null; }
+}
+const vLevel = (l) => l === 'high' ? 'bad' : l === 'medium' ? 'warn' : 'good';
+const vText = (l) => l === 'high' ? 'HIGH' : l === 'medium' ? 'MEDIUM' : l === 'low' ? 'LOW' : (l||'—').toUpperCase();
+function verrowChip(t){
+  const v = parseVerrow(t);
+  if (!v) return '';
+  return `<span class="sig ${vLevel(v.risk_level)}" title="${esc((v.critical||[]).join(' · ') || 'VERROW risk report')}">VR ${(v.risk_score ?? '—')} ${vText(v.risk_level)}</span>`;
+}
 const pct = v => { const x = Number(v) || 0; return x > 1 ? x : x * 100; };
 function secChips(sec){
   if (!sec) return '<span class="sig" title="data keamanan belum di-scan">SEC —</span>';
@@ -586,6 +597,7 @@ function renderTokens(list){
       <div class="signal-row sec-row">
         ${secChips(parseSec(t))}
       </div>
+      ${CUR==='robinhood' ? `<div class="signal-row sec-row">${verrowChip(t)}</div>` : ''}
       <div class="hint">KLIK → ANALISIS &amp; DETIL WHALE</div>
     </div>`;
   }).join('') + '</div>';
@@ -742,6 +754,43 @@ async function openToken(addr){
             return h;
           })()}
         </div>
+        ${CUR==='robinhood' ? `
+        <div class="msec">
+          <h4>VERROW Risk</h4>
+          ${(() => {
+            const v = parseVerrow(u);
+            if (!v) return '<div class="empty" style="padding:14px 6px">Belum ada data VERROW.</div>';
+            const row = (k, vv, cls='') => `<div class="gline"><span class="k">${k}</span><b class="v ${cls}">${vv}</b></div>`;
+            const yn = (b) => b === true ? '<span class="bad">YA</span>' : '<span class="ok">TIDAK</span>';
+            const known = (x) => x && x.known ? x.value : null;
+            let h = '';
+            h += row('Risk score', `${v.risk_score ?? '—'}/100 · ${vText(v.risk_level)}`, vLevel(v.risk_level));
+            h += row('Coverage', (v.coverage ?? '—') + '%');
+            (v.critical || []).forEach(c => h += row('⛔ ' + (c.title || 'critical'), esc(c.description || ''), 'warn'));
+            const ow = v.ownership || {};
+            h += row('Mint authority', ow.mintAuthorityDetected === true ? '<span class="bad">YA ⛔</span>' : '<span class="ok">tidak</span>', ow.mintAuthorityDetected ? 'warn' : '');
+            h += row('Blacklist fn', ow.blacklistFunctionDetected === true ? '<span class="bad">YA ⛔</span>' : '<span class="ok">tidak</span>', ow.blacklistFunctionDetected ? 'warn' : '');
+            h += row('Pause/halt', ow.pauseFunctionDetected === true ? '<span class="bad">YA ⛔</span>' : '<span class="ok">tidak</span>', ow.pauseFunctionDetected ? 'warn' : '');
+            h += row('Fee changeable', ow.feeChangeAuthorityDetected === true ? '<span class="bad">YA ⛔</span>' : '<span class="ok">tidak</span>', ow.feeChangeAuthorityDetected ? 'warn' : '');
+            h += row('Trading control', ow.tradingControlDetected === true ? '<span class="bad">YA ⛔</span>' : '<span class="ok">tidak</span>', ow.tradingControlDetected ? 'warn' : '');
+            const ct = v.contract || {};
+            if (ct.selfdestructDetected && ct.selfdestructDetected.known) h += row('Selfdestruct', ct.selfdestructDetected.value ? '<span class="bad">YA ⛔</span>' : '<span class="ok">tidak</span>', ct.selfdestructDetected.value ? 'warn' : '');
+            if (ct.explorerFlaggedScam && ct.explorerFlaggedScam.known) h += row('Explorer scam flag', ct.explorerFlaggedScam.value ? '<span class="bad">YA ⛔</span>' : '<span class="ok">tidak</span>', ct.explorerFlaggedScam.value ? 'warn' : '');
+            const ll = v.liquidityLock || {};
+            if (ll.classification) h += row('Liquidity lock', esc(String(ll.classification)), String(ll.classification).startsWith('locked') ? 'ok' : 'warn');
+            if (ll.topLpHolderLabel) h += row('Top LP holder', esc(ll.topLpHolderLabel), String(ll.topLpHolderLabel).toLowerCase().includes('locker') ? 'ok' : 'warn');
+            const hd = v.holders || {};
+            if (hd.top10Percent != null) h += row('Top10 holders', hd.top10Percent.toFixed(1) + '%', hd.top10Percent > 50 ? 'warn' : hd.top10Percent > 30 ? 'warn' : 'ok');
+            if (hd.topHolderPercent != null) h += row('Top holder', hd.topHolderPercent.toFixed(1) + '%', hd.topHolderPercent > 20 ? 'warn' : 'ok');
+            if (hd.totalHoldersCount && hd.totalHoldersCount.known) h += row('Holders', fmt(hd.totalHoldersCount.value, 0));
+            const dp = v.deployer || {};
+            if (dp.rapidDeploymentDetected === true) h += row('Rapid deploy', '<span class="bad">5+ kontrak/24h ⛔</span>', 'warn');
+            else if (dp.recentDeploymentCount24h != null) h += row('Deployer 24h', dp.recentDeploymentCount24h + ' kontrak');
+            const f = (v.findings || []).filter(x => x.severity === 'high').map(x => x.title);
+            if (f.length) h += row('High findings', f.slice(0,4).join('; '), 'warn');
+            return h;
+          })()}
+        </div>` : ''}
         <div class="msec" style="grid-column:span 2">
           <h4>Whale Positions (${pos.length})</h4>
           ${posHtml}
