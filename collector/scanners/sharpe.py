@@ -22,7 +22,9 @@ from collector.utils.helpers import to_float
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://www.sharpe.ai/api/v1"
-CHAIN_IDS = {"base": 8453, "robinhood": 4663}
+# Sharpe rug-check saat ini hanya mendukung jaringan EVM yang sudah discan
+# (base=8453). Robinhood (4663) belum didukung — jangan masukkan ke sini.
+CHAIN_IDS = {"base": 8453}
 
 
 class SharpeClient:
@@ -47,18 +49,24 @@ class SharpeClient:
             logger.warning("sharpe: chain %s tidak dikenali", chain)
             return None
         url = f"{self.base_url}/rug-check/security"
-        try:
-            data = get_json(url, params={"address": address, "chainId": chain_id},
-                            headers=self._headers(), timeout=25, retries=1)
-        except APIError as exc:
-            logger.warning("sharpe %s %s: %s", chain, address[:10], exc)
-            return None
-        if not data or not data.get("ok"):
-            return None
-        report = data.get("report") or data.get("data")
-        if not report:
-            return None
-        return report
+        for attempt in range(3):
+            try:
+                data = get_json(url, params={"address": address, "chainId": chain_id},
+                                headers=self._headers(), timeout=25, retries=1)
+            except APIError as exc:
+                retry = getattr(exc, "retry_after", None)
+                if attempt < 2 and retry:
+                    time.sleep(min(int(retry) + 2, 30))
+                    continue
+                logger.warning("sharpe %s %s: %s", chain, address[:10], exc)
+                return None
+            if not data or not data.get("ok"):
+                return None
+            report = data.get("report") or data.get("data")
+            if not report:
+                return None
+            return report
+        return None
 
     def trending(self, limit: int = 50) -> List[Dict]:
         """Token yang lagi trending untuk di-review rug-check."""
