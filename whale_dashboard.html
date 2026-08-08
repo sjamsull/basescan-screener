@@ -94,6 +94,8 @@
     box-shadow: 0 0 8px var(--green); animation: pulse 1.6s ease-in-out infinite;
   }
   @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1);} 50% { opacity: 0.35; transform: scale(0.7);} }
+  .spin { display: inline-block; width: 13px; height: 13px; border: 2px solid var(--border); border-top-color: var(--green); border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
   /* ── Main ──────────────────────────────── */
   .main { max-width: 1460px; margin: 0 auto; padding: 26px 28px 60px; }
@@ -506,6 +508,105 @@ const gmgnChain = (s) => s && s.token_address ? `https://gmgn.ai/${s.chain==='ro
 const chainlens = (a) => a ? `https://finland93.github.io/ChainLens/?token=${a.toLowerCase()}` : "#";
 const arkm = (a) => a ? `https://arkm.com/explorer/address/${a}` : "#";
 
+/* ── ContractScan client-side untuk BASE (tanpa web3 lib, raw RPC) ── */
+const BASE_RPC = ["https://mainnet.base.org", "https://base-rpc.publicnode.com"];
+const PROXY_SLOTS = { impl: "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc", admin: "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103" };
+const SEL = { name: "0x06fdde03", symbol: "0x95d89b41", totalSupply: "0x18160ddd", decimals: "0x313ce567", owner: "0x8da5cb5b", paused: "0x5c975abb" };
+const DANGER = [
+  { s: "40c10f19", n: "mint(address,uint256)", w: 20 },
+  { s: "8456cb59", n: "pause()", w: 15 },
+  { s: "44337ea1", n: "blacklist(address)", w: 20 },
+  { s: "e4997dc5", n: "addToBlacklist(address)", w: 20 },
+  { s: "69fe0e2d", n: "setFee(uint256)", w: 10 },
+  { s: "ec28438a", n: "setMaxTxAmount(uint256)", w: 10 },
+  { s: "c9567bf9", n: "openTrading()", w: 15 },
+  { s: "e4748b9e", n: "enableTrading()", w: 15 },
+  { s: "715018a6", n: "renounceOwnership()", w: -10 },
+];
+const BASE_DEX = { factory: "0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6", weth: "0x4200000000000000000000000000000000000006" };
+
+async function baseRpc(method, params) {
+  for (const url of BASE_RPC) {
+    try {
+      const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
+      const d = await r.json();
+      if (d.result) return d.result;
+    } catch (e) {}
+  }
+  return null;
+}
+function decAddr(h) { return h && h !== "0x" + "0".repeat(64) ? "0x" + h.slice(-40) : null; }
+function decStr(h) {
+  if (!h || h === "0x" || h.length < 130) return null;
+  try { const s = h.slice(2); const o = parseInt(s.slice(0, 64), 16) * 2; const len = parseInt(s.slice(o, o + 64), 16);
+    if (len > 100) return null; return decodeURIComponent(s.slice(o + 64, o + 64 + len * 2).replace(/../g, "%$&")); } catch (e) { return null; }
+}
+function decUint(h) { try { return BigInt(h).toString(); } catch (e) { return null; } }
+
+async function scanBase(addr) {
+  const code = await baseRpc("eth_getCode", [addr, "latest"]);
+  if (!code || code === "0x") return { error: "Not a contract (EOA)" };
+  const codeHex = code.slice(2).toLowerCase();
+  const flags = []; let score = 0; const funcs = [];
+  let proxyImpl = null, proxyAdmin = null;
+  for (const k of ["impl", "admin"]) {
+    const v = await baseRpc("eth_getStorageAt", [PROXY_SLOTS[k], "latest"]);
+    const a = decAddr(v);
+    if (a) { if (k === "impl") proxyImpl = a; else proxyAdmin = a; }
+  }
+  const isProxy = !!proxyImpl;
+  if (isProxy) { score += 10; flags.push("Upgradeable proxy"); }
+  const ti = {};
+  for (const k of ["name", "symbol", "decimals", "totalSupply", "owner"]) {
+    const v = await baseRpc("eth_call", [{ to: addr, data: SEL[k] }, "latest"]);
+    if (v) { const d = (k === "name" || k === "symbol") ? decStr(v) : (k === "owner" ? decAddr(v) : decUint(v)); if (d) ti[k] = d; }
+  }
+  for (const d of DANGER) {
+    if (codeHex.includes(d.s)) { funcs.push(d.n); if (d.w > 0) { score += d.w; if (d.w >= 10) flags.push(d.n); } else { score += d.w; flags.push(d.n); } }
+  }
+  if (ti.owner && ti.owner !== "0x" + "0".repeat(40) && ti.totalSupply && ti.decimals) {
+    const bal = await baseRpc("eth_call", [{ to: addr, data: "0x70a08231" + ti.owner.slice(2).padStart(64, "0") }, "latest"]);
+    if (bal) { const pct = Number(BigInt(bal) * 100n / BigInt(ti.totalSupply));
+      if (pct > 50) { score += 30; flags.push("Owner holds " + pct.toFixed(1) + "% (rug risk)"); }
+      else if (pct > 20) { score += 10; flags.push("Owner holds " + pct.toFixed(1) + "%"); } }
+  }
+  let liq = null;
+  try {
+    const a = addr.slice(2).toLowerCase().padStart(64, "0"), b = BASE_DEX.weth.slice(2).toLowerCase().padStart(64, "0");
+    const pair = await baseRpc("eth_call", [{ to: BASE_DEX.factory, data: "0xe6a43905" + a + b }, "latest"]);
+    const pairAddr = decAddr(pair);
+    if (pairAddr) {
+      const r = await baseRpc("eth_call", [{ to: pairAddr, data: "0x0902f1ac" }, "latest"]);
+      if (r && r !== "0x") { const h = r.slice(2); const r0 = BigInt("0x" + h.slice(0, 64)), r1 = BigInt("0x" + h.slice(64, 128));
+        const wethR = addr.toLowerCase() < BASE_DEX.weth.toLowerCase() ? r1 : r0; liq = Number(wethR) / 1e18;
+        if (liq < 0.5) { score += 10; flags.push("Very low liq (" + liq.toFixed(2) + " ETH)"); } else if (liq < 5) flags.push("Low liq (" + liq.toFixed(2) + " ETH)");
+      }
+    } else { score += 15; flags.push("No DEX pair"); }
+  } catch (e) {}
+  if (codeHex.match(/(?:5b|60[0-9a-f]{2}|61[0-9a-f]{4})ff/) && codeHex.length / 2 < 50000) { score += 15; flags.push("SELFDESTRUCT opcode"); }
+  score = Math.max(0, Math.min(100, score));
+  return { address: addr, isProxy, proxyImpl, token: ti, risk_score: score, risk_level: score >= 60 ? "HIGH" : score >= 30 ? "MEDIUM" : "LOW", risk_flags: flags, detected: funcs, liq, bytecode_size: codeHex.length / 2 };
+}
+function renderContractScan(r) {
+  const row = (k, v, cls = '') => `<div class="gline"><span class="k">${k}</span><b class="v ${cls}">${v}</b></div>`;
+  const yn = (b, tr = 'ok', fl = 'bad') => b ? `<span class="${fl}">YA ⛔</span>` : `<span class="${tr}">Tidak</span>`;
+  if (r.error) return `<div class="empty" style="padding:14px 6px">${esc(r.error)}</div>`;
+  const lvlCls = r.risk_level === 'HIGH' ? 'bad' : r.risk_level === 'MEDIUM' ? 'warn' : 'ok';
+  let h = '';
+  h += row('Risk score', `${r.risk_score}/100 · ${r.risk_level}`, lvlCls);
+  h += row('Bytecode', fmt(r.bytecode_size, 0) + ' bytes');
+  h += row('Proxy', yn(r.isProxy) + (r.proxyImpl ? ' · impl ' + short(r.proxyImpl) : ''));
+  const ti = r.token || {};
+  if (ti.name || ti.symbol) h += row('Token', esc((ti.name || '?') + ' (' + (ti.symbol || '?') + ')'));
+  if (ti.totalSupply && ti.decimals) h += row('Supply', fmt(Number(BigInt(ti.totalSupply) / 10n ** BigInt(ti.decimals)), 0));
+  if (ti.owner) h += row('Owner', ti.owner === '0x' + '0'.repeat(40) ? '<span class="ok">Renounced</span>' : short(ti.owner), ti.owner === '0x' + '0'.repeat(40) ? '' : 'warn');
+  if (r.liq != null) h += row('DEX liq', (r.liq < 0.5 ? '<span class="bad">' : r.liq < 5 ? '<span class="warn">' : '<span class="ok">') + r.liq.toFixed(2) + ' ETH</span>');
+  else h += row('DEX pair', '<span class="warn">Unknown</span>');
+  if (r.risk_flags && r.risk_flags.length) h += row('Risk flags', r.risk_flags.slice(0, 5).join(' · '), 'warn');
+  if (r.detected && r.detected.length) h += row('Privileged fns', r.detected.slice(0, 4).join(' · '), 'warn');
+  return h;
+}
+
 async function q(table, params={}) {
   const u = new URL(SUPABASE_URL + "/rest/v1/" + table + "?");
   Object.entries(params).forEach(([k,v]) => u.searchParams.set(k, v));
@@ -802,6 +903,11 @@ async function openToken(addr){
             return h;
           })()}
         </div>` : ''}
+        ${CUR==='base' ? `
+        <div class="msec">
+          <h4>ContractScan (on-chain)</h4>
+          <div id="cs-base"><div class="empty" style="padding:14px 6px"><span class="spin"></span> Scanning contract…</div></div>
+        </div>` : ''}
         <div class="msec" style="grid-column:span 2">
           <h4>Whale Positions (${pos.length})</h4>
           ${posHtml}
@@ -814,6 +920,7 @@ async function openToken(addr){
   }catch(e){
     $('modal').innerHTML += '<div class="empty">⚠ ' + esc(e.message) + '</div>';
   }
+  if (CUR==='base') scanBase(addr).then(r => { const el=$('cs-base'); if(el) el.innerHTML = renderContractScan(r); }).catch(()=>{});
 }
 function closeModal(){ $('overlay').classList.remove('open'); }
 
