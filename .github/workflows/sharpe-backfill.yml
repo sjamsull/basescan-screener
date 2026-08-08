@@ -10,6 +10,11 @@ on:
         type: choice
         options:
           - base
+      limit:
+        description: 'Max tokens per run (batch kecil supaya tidak kena rate-limit)'
+        required: true
+        default: '25'
+        type: string
       sleep:
         description: 'Spacing between requests (seconds)'
         required: true
@@ -37,4 +42,4 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
-          python -m collector.backfill_sharpe_rug --chain ${{ github.event.inputs.chain }} --sleep ${{ github.event.inputs.sleep }}
+          python -m collector.backfill_sharpe_rug --chain ${{ github.event.inputs.chain }} --sleep ${{ github.event.inputs.sleep }} --limit ${{ github.event.inputs.limit }}

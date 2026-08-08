@@ -29,6 +29,7 @@ def main() -> int:
     chain = args[args.index("--chain") + 1] if "--chain" in args else None
     dry = "--dry" in args
     sleep_s = float(args[args.index("--sleep") + 1]) if "--sleep" in args else 1.5
+    limit = int(args[args.index("--limit") + 1]) if "--limit" in args else 0
 
     store = SupabaseStorage()
     chains = [chain] if chain else ["base", "robinhood"]
@@ -63,6 +64,11 @@ def main() -> int:
             if not (chk.data and chk.data[0].get("sharpe_json")):
                 pending.append(a)
         logger.info("%s: %d perlu di-scan", ch, len(pending))
+
+        # batasi per run supaya tidak kena rate-limit (free tier 30 RPM)
+        if limit > 0:
+            pending = pending[:limit]
+            logger.info("%s: dibatasi %d token per run", ch, limit)
 
         filled = 0
         missing = 0
