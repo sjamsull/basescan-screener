@@ -54,9 +54,13 @@ class SharpeClient:
                 data = get_json(url, params={"address": address, "chainId": chain_id},
                                 headers=self._headers(), timeout=25, retries=1)
             except APIError as exc:
-                retry = getattr(exc, "retry_after", None)
-                if attempt < 2 and retry:
-                    time.sleep(min(int(retry) + 2, 30))
+                # 429 = rate limit. Backoff panjang supaya window RPM clear.
+                # Jangan retry cepat — malah menambah request yang ditolak.
+                if attempt < 2:
+                    wait = 20 * (attempt + 1)  # 20s, then 40s
+                    logger.warning("sharpe %s %s rate-limited, cooling down %ds",
+                                   chain, address[:10], wait)
+                    time.sleep(wait)
                     continue
                 logger.warning("sharpe %s %s: %s", chain, address[:10], exc)
                 return None
