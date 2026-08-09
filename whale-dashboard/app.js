@@ -269,17 +269,24 @@ function renderTokens(list){
 }
 
 /* ── filter + sort ── */
-/* verdict map per token (dari signals) untuk sort acumulation/neutral/distribution/new */
-const VERDICT_MAP = (() => {
-  const m = {};
-  (SIGS || []).forEach(s => { if (s.verdict && s.token_address) m[s.token_address] = s.verdict; });
-  return m;
-})();
-const SIG_AT = (() => {
-  const m = {};
-  (SIGS || []).forEach(s => { if (s.signal_at && s.token_address) m[s.token_address] = s.signal_at; });
-  return m;
-})();
+/* verdict map & signal_at per token — lazy, dihitung setelah SIGS terisi */
+let _verdictMapCache = null, _sigAtCache = null, _sigsVersion = -1;
+function getVerdictMap() {
+  if (_sigsVersion !== SIGS.length || !_verdictMapCache) {
+    _verdictMapCache = {};
+    (SIGS || []).forEach(s => { if (s.verdict && s.token_address) _verdictMapCache[s.token_address] = s.verdict; });
+    _sigsVersion = SIGS.length;
+  }
+  return _verdictMapCache;
+}
+function getSigAt() {
+  if (_sigsVersion !== SIGS.length || !_sigAtCache) {
+    _sigAtCache = {};
+    (SIGS || []).forEach(s => { if (s.signal_at && s.token_address) _sigAtCache[s.token_address] = s.signal_at; });
+    _sigsVersion = SIGS.length;
+  }
+  return _sigAtCache;
+}
 function filtered(){
   const ql = state.q.toLowerCase();
   let list = DATA_U;
@@ -289,6 +296,23 @@ function filtered(){
            (t.symbol||'').toLowerCase().includes(ql) ||
            ts.pos.some(p => (p.wallet||'').toLowerCase().includes(ql));
   });
+
+  const vm = getVerdictMap();
+  const sa = getSigAt();
+
+  /* strong/neutral/distribution/new = FILTER, bukan sort */
+  if (state.sort === 'strong') {
+    list = list.filter(t => ['STRONG BUY','BUY'].includes(vm[t.token_address]));
+  } else if (state.sort === 'neutral') {
+    list = list.filter(t => vm[t.token_address] === 'NEUTRAL');
+  } else if (state.sort === 'distribution') {
+    list = list.filter(t => ['CAUTION','DUMPED'].includes(vm[t.token_address]));
+  } else if (state.sort === 'new') {
+    /* token yang last_seen-nya dalam 6 jam terakhir (screening terakhir) */
+    const cutoff = Date.now() - 6 * 3600 * 1000;
+    list = list.filter(t => t.last_seen && new Date(t.last_seen).getTime() >= cutoff);
+  }
+
   const sorters = {
     rho:     (a,b) => whaleRatio(b) - whaleRatio(a),
     whales:  (a,b) => tokenStats(b.token_address).pos.length - tokenStats(a.token_address).pos.length,
@@ -298,23 +322,7 @@ function filtered(){
     vol:     (a,b) => (Number(b.volume_24h)||0) - (Number(a.volume_24h)||0),
     holders: (a,b) => (Number(b.holders)||0) - (Number(a.holders)||0),
     last:    (a,b) => (b.last_seen||'').localeCompare(a.last_seen||''),
-    strong:  (a,b) => (verdictRank(VERDICT_MAP[b.token_address]) - verdictRank(VERDICT_MAP[a.token_address])),
-    neutral: (a,b) => (verdictRankNeutral(VERDICT_MAP[b.token_address]) - verdictRankNeutral(VERDICT_MAP[a.token_address])),
-    distribution: (a,b) => (verdictRankDist(VERDICT_MAP[b.token_address]) - verdictRankDist(VERDICT_MAP[a.token_address])),
-    new:     (a,b) => (SIG_AT[a.token_address]||'').localeCompare(SIG_AT[b.token_address]||''),
   };
-  const verdictRank = (v) => {
-    switch (v) {
-      case 'STRONG BUY': return 5;
-      case 'BUY': return 4;
-      case 'NEUTRAL': return 3;
-      case 'CAUTION': return 2;
-      case 'DUMPED': return 1;
-      default: return 0;
-    }
-  };
-  const verdictRankNeutral = (v) => (v === 'NEUTRAL' ? 1 : 0);
-  const verdictRankDist = (v) => ((v === 'CAUTION' || v === 'DUMPED') ? 1 : 0);
   const whaleRatio = t => {
     const acc = tokenStats(t.token_address).accum;
     return t.market_cap ? acc / t.market_cap : 0;
