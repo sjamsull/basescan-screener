@@ -60,6 +60,13 @@ jobs:
 
       - name: Backtest tracker (follow active signals)
         env:
+          GMGN_API_KEY: ${{ secrets.GMGN_API_KEY }}
+          GMGN_API_KEY_BASE: ${{ secrets.GMGN_API_KEY_BASE }}
+          GMGN_API_KEY_ROBINHOOD: ${{ secrets.GMGN_API_KEY_ROBINHOOD }}
+          GMGN_API_KEY_BSC: ${{ secrets.GMGN_API_KEY_BSC }}
+          GMGN_API_KEY_SOL: ${{ secrets.GMGN_API_KEY_SOL }}
+          ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
+          GOPLUS_API_KEY: ${{ secrets.GOPLUS_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
