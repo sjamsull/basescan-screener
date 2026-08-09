@@ -22,6 +22,7 @@ jobs:
 
       - name: Run dead-whale scan (base)
         env:
+          GMGN_API_KEY: ${{ secrets.GMGN_API_KEY }}
           BLOCKSCOUT_API_KEY: ${{ secrets.BLOCKSCOUT_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
@@ -31,3 +32,16 @@ jobs:
         run: |
           python -m collector.processors.populate_universe --chain base --limit 50
           python -m collector.processors.dead_whale --chain base --limit 50
+
+      - name: Run dead-whale scan (robinhood)
+        env:
+          GMGN_API_KEY: ${{ secrets.GMGN_API_KEY }}
+          BLOCKSCOUT_API_KEY: ${{ secrets.BLOCKSCOUT_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          DW_MIN_TOKEN_AGE_DAYS: 30
+          DW_DEAD_TXNS_THRESHOLD: 5
+          DW_LOOKBACK_DAYS: 30
+        run: |
+          python -m collector.processors.populate_universe --chain robinhood --limit 50
+          python -m collector.processors.dead_whale --chain robinhood --limit 50
