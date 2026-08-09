@@ -105,6 +105,7 @@ class GMGNClient:
 
     def token_security(self, address: str) -> Dict:
         """GET /v1/token/security — top10 holder, honeypot, rug, alert flags."""
+        time.sleep(0.5)  # throttle supaya tidak kena rate-limit GMGN (30 RPM free tier)
         auth = self._auth()
         params = {**auth, "chain": self.chain, "address": address}
         data = get_json(f"{self.base_url}/v1/token/security", headers=self._headers(), params=params)
