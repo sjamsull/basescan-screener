@@ -66,6 +66,16 @@ DEXS_MAX_TX_PER_HOUR = float(os.getenv("DEXS_MAX_TX_PER_HOUR", "10"))
 
 # ==== API KEYS ====
 GMGN_API_KEY = os.getenv("GMGN_API_KEY", "")
+# Per-chain GMGN keys (opsional). Jika tidak diset, fallback ke GMGN_API_KEY.
+# Berguna untuk mendistribusikan load ke beberapa key supaya tidak rate-limit.
+GMGN_API_KEYS = {
+    "base": os.getenv("GMGN_API_KEY_BASE", ""),
+    "robinhood": os.getenv("GMGN_API_KEY_ROBINHOOD", ""),
+    "sol": os.getenv("GMGN_API_KEY_SOL", ""),
+    "bsc": os.getenv("GMGN_API_KEY_BSC", ""),
+    "eth": os.getenv("GMGN_API_KEY_ETH", ""),
+    "arbitrum": os.getenv("GMGN_API_KEY_ARBITRUM", ""),
+}
 ETHERSCAN_API_KEY = os.getenv("ETHERSCAN_API_KEY", "")
 GOPLUS_API_KEY = os.getenv("GOPLUS_API_KEY", "")
 BLOCKSCOUT_API_KEY = os.getenv("BLOCKSCOUT_API_KEY", "")

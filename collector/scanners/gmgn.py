@@ -59,9 +59,10 @@ CANON = {
 
 
 class GMGNClient:
-    def __init__(self, chain: str = "base"):
-        self.api_key = os.getenv("GMGN_API_KEY", "")
+    def __init__(self, chain: str = "base", api_key: Optional[str] = None):
         self.chain = chain
+        # Pakai key spesial chain jika diberikan, lalu fallback ke env, lalu ke global config
+        self.api_key = api_key or os.getenv(f"GMGN_API_KEY_{chain.upper()}", "") or os.getenv("GMGN_API_KEY", "")
         self.base_url = "https://openapi.gmgn.ai"
 
     def _headers(self) -> dict:

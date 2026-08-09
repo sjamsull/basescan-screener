@@ -25,7 +25,9 @@ class TokenPipeline:
     def __init__(self, chain: str = "base"):
         self.chain = chain
         self.chain_cfg = config.CHAINS[chain]
-        self.gmgn = GMGNClient(self.chain_cfg.gmgn_id)
+        # Pilih API key per-chain (fallback ke global GMGN_API_KEY)
+        chain_key = config.GMGN_API_KEYS.get(chain, "") or config.GMGN_API_KEY
+        self.gmgn = GMGNClient(self.chain_cfg.gmgn_id, api_key=chain_key)
         self.goplus = GoPlusClient()
         self.store = LocalStore()
         self.supabase = SupabaseStorage() if SupabaseStorage.configured() else None
