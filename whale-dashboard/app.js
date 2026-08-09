@@ -1,0 +1,803 @@
+const SUPABASE_URL = "https://tyqtxtgadxwrvbkktpiy.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR5cXR4dGdhZHh3cnZia2t0cGl5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU5NTI0MDYsImV4cCI6MjEwMTUyODQwNn0.ukroYY74wVx1bCC7sa36I8AGKl5EVNB8MGv6tQ5JKKI";
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+const short = (a) => a ? (a.length>18 ? a.slice(0,6)+"…"+a.slice(-10) : a) : "—";
+const fmt = (v,n=2) => v==null||v===""?"—":Number(v).toLocaleString(undefined,{maximumFractionDigits:n});
+const fmtUsd = (v) => {
+  v = Number(v||0);
+  if (v >= 1e9) return '$' + (v/1e9).toFixed(2) + 'B';
+  if (v >= 1e6) return '$' + (v/1e6).toFixed(2) + 'M';
+  if (v >= 1e3) return '$' + (v/1e3).toFixed(1) + 'K';
+  return '$' + Math.round(v);
+};
+const ago = (ts) => {
+  const t=new Date(ts); if(isNaN(t)) return "—";
+  const s=Math.floor((Date.now()-t)/1000); if(s<0) return "baru";
+  const d=Math.floor(s/86400), h=Math.floor(s%86400/3600), m=Math.floor(s%3600/60);
+  return d?d+"d":(h?h+"h":" "+m+"m");
+};
+const ageStr = (ts) => {
+  if (!ts) return '—';
+  const t = new Date(ts); if (isNaN(t)) return '—';
+  const s = Math.floor((Date.now() - t) / 1000); if (s < 0) return 'baru';
+  const d = Math.floor(s / 86400);
+  if (d >= 30) return (d / 30).toFixed(d >= 365 ? 1 : 0).replace(/\.0$/, '') + 'mo';
+  if (d >= 7) return d + 'd';
+  const h = Math.floor(s % 86400 / 3600);
+  return h ? h + 'h' : Math.floor(s % 3600 / 60) + 'm';
+};
+const gmgn = (a) => a ? `https://gmgn.ai/${CUR==='robinhood'?'robinhood':'base'}/token/${a.toLowerCase()}` : "#";
+const gmgnChain = (s) => s && s.token_address ? `https://gmgn.ai/${s.chain==='robinhood'?'robinhood':'base'}/token/${s.token_address.toLowerCase()}` : "#";
+const chainlens = (a) => a ? `https://finland93.github.io/ChainLens/?token=${a.toLowerCase()}` : "#";
+const arkm = (a) => a ? `https://arkm.com/explorer/address/${a}` : "#";
+
+/* ── ContractScan client-side untuk BASE (tanpa web3 lib, raw RPC) ── */
+const BASE_RPC = ["https://mainnet.base.org", "https://base-rpc.publicnode.com"];
+const PROXY_SLOTS = { impl: "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc", admin: "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103" };
+const SEL = { name: "0x06fdde03", symbol: "0x95d89b41", totalSupply: "0x18160ddd", decimals: "0x313ce567", owner: "0x8da5cb5b", paused: "0x5c975abb" };
+const DANGER = [
+  { s: "40c10f19", n: "mint(address,uint256)", w: 20 },
+  { s: "8456cb59", n: "pause()", w: 15 },
+  { s: "44337ea1", n: "blacklist(address)", w: 20 },
+  { s: "e4997dc5", n: "addToBlacklist(address)", w: 20 },
+  { s: "69fe0e2d", n: "setFee(uint256)", w: 10 },
+  { s: "ec28438a", n: "setMaxTxAmount(uint256)", w: 10 },
+  { s: "c9567bf9", n: "openTrading()", w: 15 },
+  { s: "e4748b9e", n: "enableTrading()", w: 15 },
+  { s: "715018a6", n: "renounceOwnership()", w: -10 },
+];
+const BASE_DEX = { factory: "0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6", weth: "0x4200000000000000000000000000000000000006" };
+
+async function baseRpc(method, params) {
+  for (const url of BASE_RPC) {
+    try {
+      const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
+      const d = await r.json();
+      if (d.result) return d.result;
+    } catch (e) {}
+  }
+  return null;
+}
+function decAddr(h) { return h && h !== "0x" + "0".repeat(64) ? "0x" + h.slice(-40) : null; }
+function decStr(h) {
+  if (!h || h === "0x" || h.length < 130) return null;
+  try { const s = h.slice(2); const o = parseInt(s.slice(0, 64), 16) * 2; const len = parseInt(s.slice(o, o + 64), 16);
+    if (len > 100) return null; return decodeURIComponent(s.slice(o + 64, o + 64 + len * 2).replace(/../g, "%$&")); } catch (e) { return null; }
+}
+function decUint(h) { try { return BigInt(h).toString(); } catch (e) { return null; } }
+
+async function scanBase(addr) {
+  const code = await baseRpc("eth_getCode", [addr, "latest"]);
+  if (!code || code === "0x") return { error: "Not a contract (EOA)" };
+  const codeHex = code.slice(2).toLowerCase();
+  const flags = []; let score = 0; const funcs = [];
+  let proxyImpl = null, proxyAdmin = null;
+  for (const k of ["impl", "admin"]) {
+    const v = await baseRpc("eth_getStorageAt", [PROXY_SLOTS[k], "latest"]);
+    const a = decAddr(v);
+    if (a) { if (k === "impl") proxyImpl = a; else proxyAdmin = a; }
+  }
+  const isProxy = !!proxyImpl;
+  if (isProxy) { score += 10; flags.push("Upgradeable proxy"); }
+  const ti = {};
+  for (const k of ["name", "symbol", "decimals", "totalSupply", "owner"]) {
+    const v = await baseRpc("eth_call", [{ to: addr, data: SEL[k] }, "latest"]);
+    if (v) { const d = (k === "name" || k === "symbol") ? decStr(v) : (k === "owner" ? decAddr(v) : decUint(v)); if (d) ti[k] = d; }
+  }
+  for (const d of DANGER) {
+    if (codeHex.includes(d.s)) { funcs.push(d.n); if (d.w > 0) { score += d.w; if (d.w >= 10) flags.push(d.n); } else { score += d.w; flags.push(d.n); } }
+  }
+  if (ti.owner && ti.owner !== "0x" + "0".repeat(40) && ti.totalSupply && ti.decimals) {
+    const bal = await baseRpc("eth_call", [{ to: addr, data: "0x70a08231" + ti.owner.slice(2).padStart(64, "0") }, "latest"]);
+    if (bal) { const pct = Number(BigInt(bal) * 100n / BigInt(ti.totalSupply));
+      if (pct > 50) { score += 30; flags.push("Owner holds " + pct.toFixed(1) + "% (rug risk)"); }
+      else if (pct > 20) { score += 10; flags.push("Owner holds " + pct.toFixed(1) + "%"); } }
+  }
+  let liq = null;
+  try {
+    const a = addr.slice(2).toLowerCase().padStart(64, "0"), b = BASE_DEX.weth.slice(2).toLowerCase().padStart(64, "0");
+    const pair = await baseRpc("eth_call", [{ to: BASE_DEX.factory, data: "0xe6a43905" + a + b }, "latest"]);
+    const pairAddr = decAddr(pair);
+    if (pairAddr) {
+      const r = await baseRpc("eth_call", [{ to: pairAddr, data: "0x0902f1ac" }, "latest"]);
+      if (r && r !== "0x") { const h = r.slice(2); const r0 = BigInt("0x" + h.slice(0, 64)), r1 = BigInt("0x" + h.slice(64, 128));
+        const wethR = addr.toLowerCase() < BASE_DEX.weth.toLowerCase() ? r1 : r0; liq = Number(wethR) / 1e18;
+        if (liq < 0.5) { score += 10; flags.push("Very low liq (" + liq.toFixed(2) + " ETH)"); } else if (liq < 5) flags.push("Low liq (" + liq.toFixed(2) + " ETH)");
+      }
+    } else { score += 15; flags.push("No DEX pair"); }
+  } catch (e) {}
+  if (codeHex.match(/(?:5b|60[0-9a-f]{2}|61[0-9a-f]{4})ff/) && codeHex.length / 2 < 50000) { score += 15; flags.push("SELFDESTRUCT opcode"); }
+  score = Math.max(0, Math.min(100, score));
+  return { address: addr, isProxy, proxyImpl, token: ti, risk_score: score, risk_level: score >= 60 ? "HIGH" : score >= 30 ? "MEDIUM" : "LOW", risk_flags: flags, detected: funcs, liq, bytecode_size: codeHex.length / 2 };
+}
+function renderContractScan(r) {
+  const row = (k, v, cls = '') => `<div class="gline"><span class="k">${k}</span><b class="v ${cls}">${v}</b></div>`;
+  const yn = (b, tr = 'ok', fl = 'bad') => b ? `<span class="${fl}">YA ⛔</span>` : `<span class="${tr}">Tidak</span>`;
+  if (r.error) return `<div class="empty" style="padding:14px 6px">${esc(r.error)}</div>`;
+  const lvlCls = r.risk_level === 'HIGH' ? 'bad' : r.risk_level === 'MEDIUM' ? 'warn' : 'ok';
+  let h = '';
+  h += row('Risk score', `${r.risk_score}/100 · ${r.risk_level}`, lvlCls);
+  h += row('Bytecode', fmt(r.bytecode_size, 0) + ' bytes');
+  h += row('Proxy', yn(r.isProxy) + (r.proxyImpl ? ' · impl ' + short(r.proxyImpl) : ''));
+  const ti = r.token || {};
+  if (ti.name || ti.symbol) h += row('Token', esc((ti.name || '?') + ' (' + (ti.symbol || '?') + ')'));
+  if (ti.totalSupply && ti.decimals) h += row('Supply', fmt(Number(BigInt(ti.totalSupply) / 10n ** BigInt(ti.decimals)), 0));
+  if (ti.owner) h += row('Owner', ti.owner === '0x' + '0'.repeat(40) ? '<span class="ok">Renounced</span>' : short(ti.owner), ti.owner === '0x' + '0'.repeat(40) ? '' : 'warn');
+  if (r.liq != null) h += row('DEX liq', (r.liq < 0.5 ? '<span class="bad">' : r.liq < 5 ? '<span class="warn">' : '<span class="ok">') + r.liq.toFixed(2) + ' ETH</span>');
+  else h += row('DEX pair', '<span class="warn">Unknown</span>');
+  if (r.risk_flags && r.risk_flags.length) h += row('Risk flags', r.risk_flags.slice(0, 5).join(' · '), 'warn');
+  if (r.detected && r.detected.length) h += row('Privileged fns', r.detected.slice(0, 4).join(' · '), 'warn');
+  return h;
+}
+
+async function q(table, params={}) {
+  const u = new URL(SUPABASE_URL + "/rest/v1/" + table + "?");
+  Object.entries(params).forEach(([k,v]) => u.searchParams.set(k, v));
+  const r = await fetch(u, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } });
+  if (!r.ok) throw new Error(table + " " + r.status + " " + (await r.text()));
+  return r.json();
+}
+
+/* ── state ── */
+let CUR = 'base';
+let DATA_U = [], POS_MAP = {};
+let state = { q: '', sort: 'rho' };
+
+const STATUS_META = {
+  SIGNAL:  { cls: 'r-strong', label: 'SIGNAL' },
+  CONFIRM: { cls: 'r-buy', label: 'CONFIRM' },
+  WATCH:   { cls: 'r-neutral', label: 'WATCH' },
+  DUMPED:  { cls: 'r-sell', label: 'DUMPED' },
+};
+
+/* ── agregasi per token ── */
+function tokenStats(addr){
+  const pos = POS_MAP[addr] || [];
+  const accum = pos.reduce((s,p) => s + (Number(p.buy_usd)||0), 0);
+  const buys  = pos.reduce((s,p) => s + (Number(p.buy_count)||0), 0);
+  const sells = pos.reduce((s,p) => s + (Number(p.sell_count)||0), 0);
+  const maxHold = pos.reduce((s,p) => Math.max(s, Number(p.hold_days)||0), 0);
+  const strong = pos.filter(p => p.status === 'SIGNAL').length;
+  return { pos, accum, buys, sells, maxHold, strong };
+}
+
+/* ── keamanan on-chain (GMGN security_json) ── */
+function parseSec(t){
+  if (!t || !t.security_json) return null;
+  try { return JSON.parse(t.security_json); } catch(e) { return null; }
+}
+function parseVerrow(t){
+  if (!t || !t.verrow_json) return null;
+  try { return JSON.parse(t.verrow_json); } catch(e) { return null; }
+}
+const vLevel = (l) => l === 'high' ? 'bad' : l === 'medium' ? 'warn' : 'good';
+const vText = (l) => l === 'high' ? 'HIGH' : l === 'medium' ? 'MEDIUM' : l === 'low' ? 'LOW' : (l||'—').toUpperCase();
+function verrowChip(t){
+  const v = parseVerrow(t);
+  if (!v) return '';
+  return `<span class="sig ${vLevel(v.risk_level)}" title="${esc((v.critical||[]).join(' · ') || 'VERROW risk report')}">VR ${(v.risk_score ?? '—')} ${vText(v.risk_level)}</span>`;
+}
+const pct = v => { const x = Number(v) || 0; return x > 1 ? x : x * 100; };
+/* Wallet tier hierarchy untuk token meme (berdasarkan total buy_usd) */
+const walletTier = (usd) => {
+  const v = Number(usd) || 0;
+  if (v >= 50000) return { label: 'WHALE', cls: 'r-strong' };
+  if (v >= 10000) return { label: 'SHARK', cls: 'r-buy' };
+  if (v >= 5000) return { label: 'DOLPHIN', cls: 'r-buy' };
+  if (v >= 1000) return { label: 'FISH', cls: 'r-neutral' };
+  if (v >= 100) return { label: 'CRAB', cls: 'r-neutral' };
+  return { label: 'PLANKTON', cls: '' };
+};
+/* Momentum proxy dari GMGN price historis: {1h,6h,24h} percent */
+const parsePC = (t) => {
+  if (!t || !t.price_change_json) return null;
+  try { return JSON.parse(t.price_change_json); } catch(e) { return null; }
+};
+const momentumCls = (v) => v == null ? '' : v > 0 ? 'ok' : v < 0 ? 'bad' : '';
+const momentumArrow = (v) => v == null ? '' : v > 0 ? '▲' : v < 0 ? '▼' : '–';
+const momentumCell = (v) => { if (v == null) return '—'; return `<span class="${momentumCls(v)}">${momentumArrow(v)} ${v.toFixed(2)}%</span>`; };
+function secChips(sec){
+  if (!sec) return '<span class="sig" title="data keamanan belum di-scan">SEC —</span>';
+  const c = [];
+  if (sec.is_honeypot) c.push('<span class="sig bad">⛔ HONEYPOT</span>');
+  else c.push('<span class="sig good">✓ SELLABLE</span>');
+  const tax = Math.max(Number(sec.buy_tax)||0, Number(sec.sell_tax)||0);
+  if (tax > 0) c.push(`<span class="sig ${pct(tax) > 10 ? 'bad' : pct(tax) > 5 ? 'warn' : ''}">TAX ${pct(tax).toFixed(1)}%</span>`);
+  const top10 = pct(sec.top_10_holder_rate);
+  if (top10 > 0) c.push(`<span class="sig ${top10 > 60 ? 'bad' : top10 > 30 ? 'warn' : 'good'}">TOP10 ${top10.toFixed(0)}%</span>`);
+  const rug = pct(sec.rug_ratio);
+  if (rug > 0) c.push(`<span class="sig ${rug > 30 ? 'bad' : rug > 15 ? 'warn' : ''}">RUG ${rug.toFixed(0)}%</span>`);
+  if (sec.owner_renounced === false) c.push('<span class="sig bad">⚠ NOT RENOUNCED</span>');
+  else if (sec.owner_renounced) c.push('<span class="sig good">✓ RENOUNCED</span>');
+  if (sec.open_source === false) c.push('<span class="sig warn">CLOSED SRC</span>');
+  if (sec.is_blacklist) c.push('<span class="sig bad">⛔ BLACKLIST</span>');
+  if (sec.is_show_alert) c.push('<span class="sig bad">⚠ GMGN ALERT</span>');
+  if (sec.burnt) c.push(`<span class="sig good">🔥 ${esc(String(sec.burnt))}</span>`);
+  (sec.flags || []).slice(0,2).forEach(f => c.push(`<span class="sig warn">${esc(f)}</span>`));
+  return c.join('');
+}
+
+/* ── render kartu token ── */
+function renderTokens(list){
+  const wrap = $('cards-wrap');
+  if(!list.length){ wrap.innerHTML = '<div class="empty">Belum ada token potensial untuk chain ini. Scan berikutnya dalam 6 jam.</div>'; return; }
+  wrap.innerHTML = `<div class="cards">` + list.map((t,i)=>{
+    const ts = tokenStats(t.token_address);
+    const risk = t.risk_flags ? `<span class="sig warn" title="${esc(t.risk_flags)}">⚠ ${esc(t.risk_flags.split(',').slice(0,2).join(','))}</span>` : '';
+    const lastSeen = Math.round((Date.now() - new Date(t.last_seen).getTime()) / 86400000);
+    const topTier = (() => {
+      const pos = ts.pos || [];
+      if (!pos.length) return '';
+      const maxB = Math.max(...pos.map(p => Number(p.buy_usd)||0));
+      const t = walletTier(maxB);
+      return `<span class="sig ${t.cls}" title="Tertinggi whale di token ini">TOP ${t.label}</span>`;
+    })();
+    return `
+    <div class="card in" data-idx="${i}" onclick="openToken('${t.token_address}')">
+      <div class="card-top">
+        <div class="rank">#${String(i+1).padStart(2,'0')}</div>
+        <div class="sym-block">
+          <div class="sym">${esc(t.symbol||'—')} <a href="${gmgn(t.token_address)}" target="_blank" rel="noopener" title="Buka di GMGN" onclick="event.stopPropagation()">↗</a> <a href="${chainlens(t.token_address)}" target="_blank" rel="noopener" title="Buka di ChainLens" onclick="event.stopPropagation()">🔍</a></div>
+          <div class="tname">${short(t.token_address)}</div>
+        </div>
+        <span class="rating ${ts.pos.length ? 'r-buy' : 'r-neutral'}">${ts.pos.length ? 'POTENSIAL' : 'KANDIDAT'}</span>
+      </div>
+      <div class="meta-grid">
+        <div class="mg"><div class="k">Market Cap</div><div class="v">${fmtUsd(t.market_cap)}</div></div>
+        <div class="mg"><div class="k">Vol 24h</div><div class="v">${fmtUsd(t.volume_24h)}</div></div>
+        <div class="mg"><div class="k">Holders</div><div class="v">${fmt(t.holders,0)}</div></div>
+        <div class="mg"><div class="k">Last Seen</div><div class="v">${isNaN(lastSeen) ? '—' : lastSeen + 'd'}</div></div>
+      </div>
+      <div class="signal-row">
+        <span class="sig info">◈ ${CUR==='robinhood'?'ROBINHOOD':'BASE'}</span>
+        ${topTier}
+        <span class="sig" title="Umur token sejak deploy">🕓 ${ageStr(t.created_at)}</span>
+        ${(() => { const pc = parsePC(t); if (!pc) return ''; const v = pc['1h']; return `<span class="sig ${momentumCls(v)}" title="Momentum 1h dari GMGN price historis">${momentumArrow(v)} ${v==null?'—':v.toFixed(1)+'%'} 1h</span>`; })()}
+        <a class="sig info" href="${gmgn(t.token_address)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">gmgn ↗</a>
+        ${risk}
+      </div>
+      <div class="signal-row sec-row">
+        ${secChips(parseSec(t))}
+      </div>
+      ${CUR==='robinhood' ? `<div class="signal-row sec-row">${verrowChip(t)}</div>` : ''}
+      <div class="hint">KLIK → ANALISIS &amp; DETIL WHALE</div>
+    </div>`;
+  }).join('') + '</div>';
+}
+
+/* ── filter + sort ── */
+/* verdict map per token (dari signals) untuk sort acumulation/neutral/distribution/new */
+const VERDICT_MAP = (() => {
+  const m = {};
+  (SIGS || []).forEach(s => { if (s.verdict && s.token_address) m[s.token_address] = s.verdict; });
+  return m;
+})();
+const SIG_AT = (() => {
+  const m = {};
+  (SIGS || []).forEach(s => { if (s.signal_at && s.token_address) m[s.token_address] = s.signal_at; });
+  return m;
+})();
+function filtered(){
+  const ql = state.q.toLowerCase();
+  let list = DATA_U;
+  if (ql) list = list.filter(t => {
+    const ts = tokenStats(t.token_address);
+    return (t.token_address||'').toLowerCase().includes(ql) ||
+           (t.symbol||'').toLowerCase().includes(ql) ||
+           ts.pos.some(p => (p.wallet||'').toLowerCase().includes(ql));
+  });
+  const sorters = {
+    rho:     (a,b) => whaleRatio(b) - whaleRatio(a),
+    whales:  (a,b) => tokenStats(b.token_address).pos.length - tokenStats(a.token_address).pos.length,
+    accum:   (a,b) => tokenStats(b.token_address).accum - tokenStats(a.token_address).accum,
+    mcap:    (a,b) => (Number(b.market_cap)||0) - (Number(a.market_cap)||0),
+    momentum: (a,b) => (Number(parsePC(b)['1h'])||0) - (Number(parsePC(a)['1h'])||0),
+    vol:     (a,b) => (Number(b.volume_24h)||0) - (Number(a.volume_24h)||0),
+    holders: (a,b) => (Number(b.holders)||0) - (Number(a.holders)||0),
+    last:    (a,b) => (b.last_seen||'').localeCompare(a.last_seen||''),
+    strong:  (a,b) => (verdictRank(VERDICT_MAP[b.token_address]) - verdictRank(VERDICT_MAP[a.token_address])),
+    neutral: (a,b) => (verdictRankNeutral(VERDICT_MAP[b.token_address]) - verdictRankNeutral(VERDICT_MAP[a.token_address])),
+    distribution: (a,b) => (verdictRankDist(VERDICT_MAP[b.token_address]) - verdictRankDist(VERDICT_MAP[a.token_address])),
+    new:     (a,b) => (SIG_AT[a.token_address]||'').localeCompare(SIG_AT[b.token_address]||''),
+  };
+  const verdictRank = (v) => {
+    switch (v) {
+      case 'STRONG BUY': return 5;
+      case 'BUY': return 4;
+      case 'NEUTRAL': return 3;
+      case 'CAUTION': return 2;
+      case 'DUMPED': return 1;
+      default: return 0;
+    }
+  };
+  const verdictRankNeutral = (v) => (v === 'NEUTRAL' ? 1 : 0);
+  const verdictRankDist = (v) => ((v === 'CAUTION' || v === 'DUMPED') ? 1 : 0);
+  const whaleRatio = t => {
+    const acc = tokenStats(t.token_address).accum;
+    return t.market_cap ? acc / t.market_cap : 0;
+  };
+  return list.sort(sorters[state.sort] || sorters.rho);
+}
+
+/* ── stats ── */
+function refreshStats(){
+  let buy = 0, maxAccum = 1;
+  DATA_U.forEach(t => {
+    const ts = tokenStats(t.token_address);
+    buy += ts.accum;
+    maxAccum = Math.max(maxAccum, ts.accum);
+  });
+  $('stat-token').textContent = DATA_U.length;
+  const avg = DATA_U.length ? Math.round(DATA_U.reduce((s,t) => s + Math.min(100, tokenStats(t.token_address).accum / maxAccum * 100), 0) / DATA_U.length) : 0;
+  $('hero-avg').textContent = avg;
+  $('view-title').textContent = `› TOKEN POTENSIAL · ${CUR==='robinhood'?'ROBINHOOD':'BASE'}`;
+  buildChart();
+}
+function buildChart(){
+  const order = [ ['SIGNAL','var(--green)'], ['CONFIRM','var(--cyan)'], ['WATCH','var(--amber)'], ['DUMPED','var(--red)'] ];
+  const row = {};
+  let totalPos = 0, totalUsd = 0;
+  DATA_U.forEach(t => (POS_MAP[t.token_address]||[]).forEach(p => {
+    row[p.status] = row[p.status] || { n: 0, usd: 0 };
+    row[p.status].n++;
+    row[p.status].usd += Number(p.buy_usd)||0;
+    totalPos++; totalUsd += Number(p.buy_usd)||0;
+  }));
+  const maxN = Math.max(1, ...order.map(([k]) => (row[k]?.n)||0));
+  const maxU = Math.max(1, ...order.map(([k]) => (row[k]?.usd)||0));
+  const cN = n => n >= 1e6 ? (n/1e6).toFixed(1) + 'M' : n >= 1e3 ? Math.round(n/1e3) + 'K' : n;
+
+  const ticks = [0, .25, .5, .75, 1];
+  $('glines').innerHTML = ticks.map((f,i) => `
+    <div class="gridline${f === 0 ? ' g0' : ''}" style="top:${f * 100}%">
+      <span class="gl l">${cN(Math.round(maxN * f))}</span>
+      <span class="gl r">${fmtUsd(maxU * f)}</span>
+    </div>`).join('');
+
+  $('blar-area').innerHTML = order.map(([k]) => {
+    const d = row[k] || { n: 0, usd: 0 };
+    const hN = Math.max(2, Math.round(d.n / maxN * 100));
+    const hU = Math.max(2, Math.round(d.usd / maxU * 100));
+    return `
+    <div class="bl-col">
+      <div class="bl-plot">
+        <div class="bl-bar bl-cnt" style="height:${hN}%"><span>${d.n}</span></div>
+        <div class="bl-bar bl-usd" style="height:${hU}%"><span>${hU >= 30 ? fmtUsd(d.usd) : ''}</span></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  $('axis-row').innerHTML = order.map(([k]) => `<div class="ax">${k}</div>`).join('');
+  $('charts-legend').innerHTML =
+    `<span class="lg"><i style="background:var(--green)"></i>posisi</span>
+     <span class="lg"><i style="background:var(--amber)"></i>akumulasi</span>
+     <span class="tot">✓ <b>${totalPos}</b> posisi · <b>${fmtUsd(totalUsd)}</b></span>`;
+}
+
+/* ── render pipeline ── */
+function render(){
+  renderTokens(filtered());
+}
+
+/* ── modal ── */
+function openModal(title, bodyHTML){
+  $('modal').innerHTML = `
+    <div class="modal-head">
+      <div class="sym-block">
+        <div class="sym">${title}</div>
+        <div class="tname" id="m-sub"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    ${bodyHTML}`;
+  $('overlay').classList.add('open');
+}
+async function openToken(addr){
+  const t = (DATA_U.find(x => x.token_address === addr)) || {};
+  openModal(esc(t.symbol || '—'), '<div class="empty">Memuat…</div>');
+  $('m-sub').textContent = short(addr);
+  try{
+    const [uni, pos] = await Promise.all([
+      q('dead_token_universe', {select:'*', token_address: `eq.${addr}`, chain: `eq.${CUR}`}),
+      q('whale_positions', {select:'*', token_address: `eq.${addr}`, chain: `eq.${CUR}`})
+    ]);
+    const u = uni[0] || {};
+    const posHtml = pos.length ? `
+      <table class="mtable">
+        <thead><tr><th>Wallet</th><th>Tier</th><th>Status</th><th class="num">Buy</th><th class="num">Sell</th><th class="num">USD</th><th class="num">Hold</th><th>Arkham</th></tr></thead>
+        <tbody>${pos.map(p => `
+          <tr><td>${short(p.wallet)}</td><td><span class="rating ${walletTier(p.buy_usd).cls}" style="padding:2px 7px">${walletTier(p.buy_usd).label}</span></td><td><span class="rating ${(STATUS_META[p.status]||STATUS_META.WATCH).cls}" style="padding:2px 7px">${p.status||'WATCH'}</span></td>
+          <td class="num">${fmt(p.buy_count,0)}</td><td class="num">${fmt(p.sell_count,0)}</td>
+          <td class="num ok">${fmtUsd(p.buy_usd)}</td><td class="num">${fmt(p.hold_days,1)}d</td>
+          <td><a class="sig info" style="padding:2px 6px" href="${arkm(p.wallet)}" target="_blank">ark ↗</a></td></tr>`).join('')}</tbody>
+      </table>` : '<div class="empty" style="padding:20px 10px">Belum ada whale position tercatat.</div>';
+    $('modal').innerHTML += `
+      <div class="modal-grid">
+        <div class="msec">
+          <h4>Overview</h4>
+          <div class="gline"><span class="k">Symbol</span><b class="v">${esc(u.symbol||'—')}</b></div>
+          <div class="gline"><span class="k">Market cap</span><b class="v">${fmtUsd(u.market_cap)}</b></div>
+          <div class="gline"><span class="k">Volume 24h</span><b class="v">${fmtUsd(u.volume_24h)}</b></div>
+          <div class="gline"><span class="k">Holders</span><b class="v">${fmt(u.holders,0)}</b></div>
+          <div class="gline"><span class="k">Chain</span><b class="v">${CUR==='robinhood'?'ROBINHOOD':'BASE'}</b></div>
+          <div class="gline"><span class="k">Momentum 1h</span><b class="v">${momentumCell((parsePC(u)||{})['1h'])}</b></div>
+          <div class="gline"><span class="k">Momentum 24h</span><b class="v">${momentumCell((parsePC(u)||{})['24h'])}</b></div>
+          ${u.risk_flags ? `<div class="gline"><span class="k">Risk</span><b class="v warn">${esc(u.risk_flags)}</b></div>` : ''}
+        </div>
+        <div class="msec">
+          <h4>Security On-Chain</h4>
+          ${(() => {
+            const s = parseSec(u);
+            if (!s) return '<div class="empty" style="padding:14px 6px">Belum ada data keamanan di-scan.</div>';
+            const row = (k, v, cls='') => `<div class="gline"><span class="k">${k}</span><b class="v ${cls}">${v}</b></div>`;
+            const adv = a => a ? '<span class="ok">ADA</span>' : '<span class="bad">TIDAK</span>';
+            let h = '';
+            h += row('Honeypot', s.is_honeypot ? '<span class="bad">⚠ YA</span>' : '<span class="ok">AMAN</span>');
+            h += row('Buy tax', pct(s.buy_tax).toFixed(2) + '%', pct(s.buy_tax) > 10 ? 'warn' : '');
+            h += row('Sell tax', pct(s.sell_tax).toFixed(2) + '%', pct(s.sell_tax) > 10 ? 'warn' : '');
+            h += row('Top10 holders', pct(s.top_10_holder_rate).toFixed(1) + '%', pct(s.top_10_holder_rate) > 60 ? 'warn' : '');
+            h += row('Rug ratio', pct(s.rug_ratio).toFixed(1) + '%', pct(s.rug_ratio) > 30 ? 'warn' : '');
+            h += row('Owner renounced', s.owner_renounced === false ? '<span class="bad">TIDAK</span>' : '<span class="ok">YA</span>');
+            h += row('Open source', s.open_source === false ? '<span class="bad">TIDAK</span>' : '<span class="ok">YA</span>');
+            h += row('Blacklist', adv(s.is_blacklist));
+            h += row('GMGN alert', s.is_show_alert ? '<span class="bad">YA</span>' : '<span class="ok">TIDAK</span>');
+            if (s.burnt) h += row('Burnt', esc(String(s.burnt)));
+            if ((s.flags || []).length) h += row('Flags', esc((s.flags || []).join(', ')));
+            return h;
+          })()}
+        </div>
+        ${CUR==='robinhood' ? `
+        <div class="msec">
+          <h4>VERROW Risk</h4>
+          ${(() => {
+            const v = parseVerrow(u);
+            if (!v) return '<div class="empty" style="padding:14px 6px">Belum ada data VERROW.</div>';
+            const row = (k, vv, cls='') => `<div class="gline"><span class="k">${k}</span><b class="v ${cls}">${vv}</b></div>`;
+            const yn = (b) => b === true ? '<span class="bad">YA</span>' : '<span class="ok">TIDAK</span>';
+            const known = (x) => x && x.known ? x.value : null;
+            let h = '';
+            h += row('Risk score', `${v.risk_score ?? '—'}/100 · ${vText(v.risk_level)}`, vLevel(v.risk_level));
+            h += row('Coverage', (v.coverage ?? '—') + '%');
+            (v.critical || []).forEach(c => h += row('⛔ ' + (c.title || 'critical'), esc(c.description || ''), 'warn'));
+            const ow = v.ownership || {};
+            h += row('Mint authority', ow.mintAuthorityDetected === true ? '<span class="bad">YA ⛔</span>' : '<span class="ok">tidak</span>', ow.mintAuthorityDetected ? 'warn' : '');
+            h += row('Blacklist fn', ow.blacklistFunctionDetected === true ? '<span class="bad">YA ⛔</span>' : '<span class="ok">tidak</span>', ow.blacklistFunctionDetected ? 'warn' : '');
+            h += row('Pause/halt', ow.pauseFunctionDetected === true ? '<span class="bad">YA ⛔</span>' : '<span class="ok">tidak</span>', ow.pauseFunctionDetected ? 'warn' : '');
+            h += row('Fee changeable', ow.feeChangeAuthorityDetected === true ? '<span class="bad">YA ⛔</span>' : '<span class="ok">tidak</span>', ow.feeChangeAuthorityDetected ? 'warn' : '');
+            h += row('Trading control', ow.tradingControlDetected === true ? '<span class="bad">YA ⛔</span>' : '<span class="ok">tidak</span>', ow.tradingControlDetected ? 'warn' : '');
+            const ct = v.contract || {};
+            if (ct.selfdestructDetected && ct.selfdestructDetected.known) h += row('Selfdestruct', ct.selfdestructDetected.value ? '<span class="bad">YA ⛔</span>' : '<span class="ok">tidak</span>', ct.selfdestructDetected.value ? 'warn' : '');
+            if (ct.explorerFlaggedScam && ct.explorerFlaggedScam.known) h += row('Explorer scam flag', ct.explorerFlaggedScam.value ? '<span class="bad">YA ⛔</span>' : '<span class="ok">tidak</span>', ct.explorerFlaggedScam.value ? 'warn' : '');
+            const ll = v.liquidityLock || {};
+            if (ll.classification) h += row('Liquidity lock', esc(String(ll.classification)), String(ll.classification).startsWith('locked') ? 'ok' : 'warn');
+            if (ll.topLpHolderLabel) h += row('Top LP holder', esc(ll.topLpHolderLabel), String(ll.topLpHolderLabel).toLowerCase().includes('locker') ? 'ok' : 'warn');
+            const hd = v.holders || {};
+            if (hd.top10Percent != null) h += row('Top10 holders', hd.top10Percent.toFixed(1) + '%', hd.top10Percent > 50 ? 'warn' : hd.top10Percent > 30 ? 'warn' : 'ok');
+            if (hd.topHolderPercent != null) h += row('Top holder', hd.topHolderPercent.toFixed(1) + '%', hd.topHolderPercent > 20 ? 'warn' : 'ok');
+            if (hd.totalHoldersCount && hd.totalHoldersCount.known) h += row('Holders', fmt(hd.totalHoldersCount.value, 0));
+            const dp = v.deployer || {};
+            if (dp.rapidDeploymentDetected === true) h += row('Rapid deploy', '<span class="bad">5+ kontrak/24h ⛔</span>', 'warn');
+            else if (dp.recentDeploymentCount24h != null) h += row('Deployer 24h', dp.recentDeploymentCount24h + ' kontrak');
+            const f = (v.findings || []).filter(x => x.severity === 'high').map(x => x.title);
+            if (f.length) h += row('High findings', f.slice(0,4).join('; '), 'warn');
+            return h;
+          })()}
+        </div>` : ''}
+        ${CUR==='base' ? `
+        <div class="msec">
+          <h4>ContractScan (on-chain)</h4>
+          <div id="cs-base"><div class="empty" style="padding:14px 6px"><span class="spin"></span> Scanning contract…</div></div>
+        </div>` : ''}
+        <div class="msec" style="grid-column:span 2">
+          <h4>Whale Positions (${pos.length})</h4>
+          ${posHtml}
+        </div>
+      </div>
+      <div class="signal-row" style="margin-top:16px">
+        <a class="sig info" href="${gmgn(addr)}" target="_blank" rel="noopener">Buka di GMGN ↗</a>
+        <a class="sig info" href="${chainlens(addr)}" target="_blank" rel="noopener">ChainLens 🔍</a>
+      </div>`;
+  }catch(e){
+    $('modal').innerHTML += '<div class="empty">⚠ ' + esc(e.message) + '</div>';
+  }
+  if (CUR==='base') scanBase(addr).then(r => { const el=$('cs-base'); if(el) el.innerHTML = renderContractScan(r); }).catch(()=>{});
+}
+function closeModal(){ $('overlay').classList.remove('open'); }
+
+/* ── chain / events ── */
+function setChain(name){
+  if (CUR === name) return;
+  CUR = name;
+  document.querySelectorAll('#chain-tabs .tab').forEach(b => b.classList.toggle('on', b.dataset.chain === name));
+  $('mode-chip').textContent = 'MODE: ' + (name==='robinhood' ? 'ROBINHOOD' : 'BASE');
+  cacheLoad(); // pakai cache dulu → render cepat, load() akan fetch jika ada perubahan
+  renderScanChips();
+  refreshStats();
+  render();
+  load(); // cek perubahan di background
+}
+document.querySelectorAll('#chain-tabs .tab').forEach(b => b.onclick = () => setChain(b.dataset.chain));
+$('search').addEventListener('input', debounce(e => { state.q = e.target.value; render(); }, 150));
+$('sort').addEventListener('change', e => { state.sort = e.target.value; render(); });
+$('overlay').addEventListener('click', e => { if (e.target === $('overlay')) closeModal(); });
+window.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+let lastSig = '';
+let TRACK = null; // tak terpakai lagi: metrik dihitung dari SIGS per chain
+let LAST_SCAN = null, MAX_SIGNAL_AT = null;
+let SIGS = [], SYMBOL_MAP = {}, SYM_MC = {}, SIGS_CHAIN = null;
+const SCAN_INTERVAL_H = 6; // cron: 0 */6 * * *
+
+/* ── localStorage cache: percepat load & chain-switch ── */
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 menit
+function cacheKey(){ return 'bscan_' + CUR; }
+function cacheSave(){
+  try {
+    localStorage.setItem(cacheKey(), JSON.stringify({
+      SIGS, SYM_MC, SYMBOL_MAP, LAST_SCAN, MAX_SIGNAL_AT, ts: Date.now(),
+    }));
+  } catch (e) {}
+}
+function cacheLoad(){
+  try {
+    const d = JSON.parse(localStorage.getItem(cacheKey()));
+    if (!d || !d.ts) return null;
+    if (Date.now() - d.ts > CACHE_TTL_MS) return null; // expired
+    SIGS = d.SIGS || [];
+    SYM_MC = d.SYM_MC || {};
+    SYMBOL_MAP = d.SYMBOL_MAP || {};
+    LAST_SCAN = d.LAST_SCAN || null;
+    MAX_SIGNAL_AT = d.maxSignalAt || null;
+    return d;
+  } catch (e) { return null; }
+}
+function cacheClear(){ try { localStorage.removeItem(cacheKey()); } catch (e) {} }
+
+function dataSig() {
+  return (CUR + '|' + DATA_U.length + '|' + DATA_U.map(t => t.token_address).join(','));
+}
+
+/* Jumlah "Scan terakhir" dari data (max last_seen), bukan jam dinding.
+   "Scan berikutnya" = slot cron jam UTC kelipatan 6 setelah scan terakhir. */
+function slotAfter(ts, everyH) {
+  const d = new Date(ts);
+  d.setUTCSeconds(0, 0);
+  d.setUTCMinutes(0, 0);
+  let h = d.getUTCHours() + 1;
+  while (h % everyH !== 0) h++;
+  d.setUTCHours(h);
+  return d;
+}
+function renderScanChips() {
+  if (!LAST_SCAN) return;
+  const last = new Date(LAST_SCAN);
+  const next = slotAfter(LAST_SCAN, SCAN_INTERVAL_H);
+  const isSameDay = last.toDateString() === new Date().toDateString();
+  const lastTxt = (isSameDay ? '' : last.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) + ' ') +
+    last.toLocaleTimeString('id-ID');
+  const nextTxt = next.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) + ' ' +
+    next.toLocaleTimeString('id-ID');
+  $('updated').textContent = `Scan terakhir ${lastTxt}`;
+  $('next').textContent = `Scan berikutnya ${nextTxt}`;
+}
+
+function renderTrack() {
+  if (!SIGS.length) {
+    $('track-when').textContent = '— belum ada sinyal';
+    return;
+  }
+  /* Defensif: buang token non-meme (biru-chip/wrapped/stablecoin — konsisten
+     dengan SIGNAL_EXCLUDE_* di collector) dari semua metrik/tabel. */
+  const NM_EXACT = ['WBTC','CBTC','RBTC','WETH','STETH','WSTETH','CBETH','RSETH','WRSETH','RETH','ETHBTC','UNI','LINK','AAVE','MKR','CRV','SNX','COMP','USDC','USDT','USDE','PYUSD','TUSD','FDUSD','BUSD','GUSD','CGUSD','LUSD','USDS','DAI','TBILL','USDY','MTLBILL'];
+  const NM_SYM_PART = ['WRAP','STAKED','STEAK','LEVERAGED','STRATEGY','VAULT'];
+  const isNM = (s) => {
+    const sym = String((s.prepared_data && s.prepared_data.symbol) || SYMBOL_MAP[s.token_address] || '').toUpperCase();
+    if (!sym) return false;
+    if (NM_EXACT.includes(sym)) return true;
+    return NM_SYM_PART.some(p => sym.includes(p));
+  };
+  /* Defensif 2: sinyal plan mode='avoid' (non-meme/CAUTION tanpa plan TP) bukan
+     sinyal meme yang masuk radar — buang dari metrik & tabel Track Record. */
+  const isAvoid = (s) => String(((s.prepared_data && s.prepared_data.plan) || {}).mode || '').toLowerCase() === 'avoid';
+  SIGS = SIGS.filter(s => !isNM(s) && !isAvoid(s));
+  /* Metrik dihitung dari sinyal chain aktif (konsisten dengan tabel detail). */
+  const h = (ts) => ts ? new Date(ts).getTime() : 0;
+  const valuable = SIGS.filter(s =>
+    ['COMPLETED','INVALIDATED','EXPIRED'].includes(s.status) || !!s.tp1_at || (s.best_tp||0) > 0);
+  const tt1 = SIGS.map(s => s.time_to_tp1_h).filter(h2 => h2 != null && h2 >= 0);
+  const m = {
+    evaluated: valuable.length,
+    tp1_hits: SIGS.filter(s => !!s.tp1_at).length,
+    tp2_hits: SIGS.filter(s => !!s.tp2_at).length,
+    tp3_hits: SIGS.filter(s => !!s.tp3_at).length,
+    invalidated: SIGS.filter(s => s.status === 'INVALIDATED').length,
+    completed: SIGS.filter(s => s.status === 'COMPLETED').length,
+    expired: SIGS.filter(s => s.status === 'EXPIRED').length,
+    avg_time_to_tp1_h: tt1.length ? Math.round(tt1.reduce((a,b)=>a+b,0) / tt1.length * 100) / 100 : null,
+    n_time_to_tp1: tt1.length,
+    time_to_tp1_anomalies: SIGS.filter(s => s.time_to_tp1_h != null && s.time_to_tp1_h < 0).length,
+  };
+  m.tp1_hit_rate = m.evaluated ? Math.round(m.tp1_hits / m.evaluated * 1000) / 1000 : null;
+  m.invalidation_rate = m.evaluated ? Math.round(m.invalidated / m.evaluated * 1000) / 1000 : null;
+  const pct = (v) => (v == null ? '—' : (v * 100).toFixed(1) + '%');
+  $('t-tp1').textContent = pct(m.tp1_hit_rate);
+  $('t-tp1').style.color = (m.tp1_hit_rate ?? 0) >= 0.5 ? 'var(--green)' : 'var(--amber)';
+  $('t-inv').textContent = pct(m.invalidation_rate);
+  $('t-inv').style.color = (m.invalidation_rate ?? 0) <= 0.4 ? 'var(--green)' : 'var(--red)';
+  $('t-tt1').textContent = m.avg_time_to_tp1_h == null ? '—' : m.avg_time_to_tp1_h.toFixed(1) + 'h';
+  $('t-tt1').title = 'n=' + (m.n_time_to_tp1 ?? 0);
+  $('t-eval').textContent = fmt(m.evaluated, 0);
+  $('t-tp123').textContent = fmt(m.tp1_hits + m.tp2_hits + m.tp3_hits, 0);
+  $('t-anom').textContent = m.time_to_tp1_anomalies + '';
+  $('t-anom').style.color = m.time_to_tp1_anomalies > 0 ? 'var(--red)' : 'var(--green)';
+  $('track-when').textContent = '· ' + CUR.toUpperCase() + ' · ' + SIGS.length + ' sinyal';
+}
+
+/* ── Sub-halaman Track Record (tabel detail per sinyal) ── */
+const planOf = (s) => { const pd = s.prepared_data || {}; return pd.plan || {}; };
+const symOf = (addr) => SYMBOL_MAP[addr] || short(addr);
+const netOf = (s) => (s.chain === 'robinhood' ? 'ROBINHOOD' : 'BASE');
+const fmtAtt = (ts) => ts ? new Date(ts).toLocaleString('id-ID', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
+/* MC saat sinyal (GMGN) — dari entry_zone_mcap (dibuat build_plan dari GMGN
+   current saat sinyal) untuk tier buy/probe. Token tanpa plan entry (watch/
+   avoid/NEUTRAL/CAUTION) bukan entry cycle -> tampil '—', bukan backfill
+   DexScreener yang per-pair meleset. */
+const mcIn = (s) => {
+  const p = planOf(s);
+  const z = p.entry_zone_mcap;
+  if (!z || typeof z !== 'object') return '—';
+  const hi = Number(z.hi || 0), lo = Number(z.lo || 0);
+  if (hi > 0) return fmtUsd(Math.round(hi));          // BUY: hi = current GMGN
+  if (lo > 0) return fmtUsd(Math.round((lo + (lo / 0.95)) / 2)); // STRONG BUY: lo = 0.95x
+  return '—';
+};
+
+function tableHTML(cols, rows, rowMapper, empty) {
+  if (!rows.length) return `<div class="empty" style="padding:22px 10px">${empty || 'tidak ada data'}</div>`;
+  return `<div class="track-tbl"><table class="mtable">
+    <thead><tr>${cols.map(c => `<th class="${c.num ? 'num' : ''}">${c.t}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(s => `<tr>${rowMapper(s).map((c, i) => `<td class="${cols[i].num ? 'num' : ''}">${c}</td>`).join('')}</tr>`).join('')}</tbody>
+  </table></div>`;
+}
+
+function openTrackPage(kind) {
+  const scCell = (s) => `<a class="tk" href="${gmgnChain(s)}" target="_blank" rel="noopener" title="${esc(s.token_address)}">${esc(short(s.token_address))}</a>`;
+  const nameCell = (s) => esc(SYMBOL_MAP[s.token_address] || '—');
+  const netCell = (s) => esc(netOf(s));
+  /* MC saat ini vs MC masuk radar → ▲ naik / ▼ turun. Berbasis GMGN. */
+const mcNow = (s) => {
+  /* MC "saat ini" = GMGN saja (dead_token_universe.market_cap backfill GMGN). */
+  const mc = SYM_MC[s.token_address];
+  if (!mc) return '—';
+  const txt = fmtUsd(mc);
+  const em = Number((planOf(s).entry_mcap) || 0) || Number((planOf(s).entry_zone_mcap || {}).hi || 0);
+  if (!(em > 0)) return txt;
+  const d = (mc - em) / em;
+  if (d > 0.001) return `<span class="up-c">${txt} ▲</span>`;
+  if (d < -0.001) return `<span class="up-c dn">${txt} ▼</span>`;
+  return txt;
+};
+
+  if (kind === 'tp1') {
+    const cols = [{ t: 'SC' }, { t: 'Token' }, { t: 'Jaringan' }, { t: 'MC masuk radar' }, { t: 'MC saat ini', num: true }];
+    const rows = SIGS.filter(s => s.tp1_at).sort((a,b) => (a.time_to_tp1_h??1e9) - (b.time_to_tp1_h??1e9));
+    openModal('TP1 · token yang kena TP1 (' + rows.length + ')',
+      tableHTML(cols, rows, s => [scCell(s), nameCell(s), netCell(s), mcIn(s), mcNow(s)], 'Belum ada yang kena TP1.'));
+  } else if (kind === 'tt1') {
+    const cols = [{ t: 'SC' }, { t: 'Token' }, { t: 'Jaringan' }, { t: 'MC masuk radar' }, { t: 'Jam signal' }, { t: 'Jam hit TP1' }, { t: 'Durasi', num: true }];
+    const rows = SIGS.filter(s => s.tp1_at && s.signal_at).sort((a,b) => (a.time_to_tp1_h??1e9) - (b.time_to_tp1_h??1e9));
+    openModal('Waktu ke TP1 · durasi masuk radar → hit TP1 (' + rows.length + ')',
+      tableHTML(cols, rows, s => [
+        scCell(s), nameCell(s), netCell(s), mcIn(s),
+        fmtAtt(s.signal_at), fmtAtt(s.tp1_at),
+        (s.time_to_tp1_h == null ? '—' : s.time_to_tp1_h + 'h')
+      ], 'Belum ada sinyal ber-TP1.'));
+  } else if (kind === 'inv') {
+    const cols = [{ t: 'SC' }, { t: 'Token' }, { t: 'Jaringan' }, { t: 'MC masuk radar' }, { t: 'MC saat ini', num: true }, { t: 'Status' }];
+    const rows = SIGS.filter(s => s.status === 'INVALIDATED').sort((a,b) => (b.signal_at||'').localeCompare(a.signal_at||''));
+    openModal('INVALIDATED · token yang invalid (' + rows.length + ')',
+      tableHTML(cols, rows, s => [scCell(s), nameCell(s), netCell(s), mcIn(s), mcNow(s), esc(s.status || '—')], 'Tidak ada sinyal invalid.'));
+  } else if (kind === 'pantau') {
+    const cols = [{ t: 'SC' }, { t: 'Token' }, { t: 'Jaringan' }, { t: 'Jam signal' }, { t: 'Jam hit TP1' }, { t: 'Jam hit TP2' }, { t: 'Jam hit TP3' }];
+    const rows = SIGS.filter(s => s.tp1_at || s.tp2_at || s.tp3_at || s.status === 'ACTIVE').sort((a,b) => (b.signal_at||'').localeCompare(a.signal_at||''));
+    openModal('Pantauan TP · jam sinyal & jam hit (' + rows.length + ')',
+      tableHTML(cols, rows, s => [
+        scCell(s), nameCell(s), netCell(s),
+        fmtAtt(s.signal_at),
+        s.tp1_at ? fmtAtt(s.tp1_at) : '—',
+        'pantau manual',
+        'pantau manual'
+      ], 'Belum ada sinyal terpantau.'));
+  } else if (kind === 'eval') {
+    const cols = [{ t: 'SC' }, { t: 'Token' }, { t: 'Jaringan' }, { t: 'Evaluasi' }];
+    const rows = SIGS.slice().sort((a,b) => (b.signal_at||'').localeCompare(a.signal_at||''));
+    openModal('Sinyal dievaluasi (' + rows.length + ')',
+      tableHTML(cols, rows, s => [scCell(s), nameCell(s), netCell(s), esc(s.verdict || s.status || '—')], 'Belum ada sinyal.'));
+  } else if (kind === 'anom') {
+    const cols = [{ t: 'SC' }, { t: 'Token' }, { t: 'Jaringan' }, { t: 'time_to_tp1', num: true }, { t: 'Status' }];
+    const rows = SIGS.filter(s => (s.time_to_tp1_h ?? 0) < 0 || (s.time_to_tp1_h == null && s.tp1_at)).sort((a,b) => (b.signal_at||'').localeCompare(a.signal_at||''));
+    openModal('Anomali waktu ke TP1 (' + rows.length + ')',
+      tableHTML(cols, rows, s => [scCell(s), nameCell(s), netCell(s), s.time_to_tp1_h == null ? '—' : s.time_to_tp1_h, esc(s.status || '—')], 'Tidak ada token anomali.'));
+  }
+}
+
+async function load(){
+  try{
+    const ch = { chain: `eq.${CUR}` };
+
+    /* 1) Cek perubahan ringan dulu (2 request kecil) */
+    const [probeU, probeS] = await Promise.allSettled([
+      q('dead_token_universe', {select: 'last_seen', ...ch, order: 'last_seen.desc', limit: '1'}),
+      q('signals', {select: 'signal_at', ...ch, order: 'signal_at.desc', limit: '1'})
+    ]);
+    const newLastSeen = probeU.status === 'fulfilled' ? (probeU.value[0]?.last_seen || null) : null;
+    const newMaxSigAt = probeS.status === 'fulfilled' ? (probeS.value[0]?.signal_at || null) : null;
+
+    /* Tidak ada data baru + cache valid → pakai cache, skip heavy fetch */
+    if (newLastSeen === LAST_SCAN && newMaxSigAt === MAX_SIGNAL_AT && SIGS.length) {
+      renderScanChips();
+      refreshStats();
+      render();
+      return;
+    }
+
+    /* 2) Ada perubahan — fetch data lengkap */
+    const [u,w] = await Promise.allSettled([
+      q('dead_token_universe', {...ch, order: 'last_seen.desc', limit: '150'}),
+      q('whale_positions', {...ch, order: 'buy_usd.desc', limit: '200'})
+    ]);
+    const ur = u.status === 'fulfilled' ? u.value : [];
+    const wr = w.status === 'fulfilled' ? w.value : [];
+    if (u.status === 'rejected') throw new Error(u.reason.message);
+    if (w.status === 'rejected') throw new Error(w.reason.message);
+    DATA_U = ur;
+    POS_MAP = {};
+    wr.forEach(p => { (POS_MAP[p.token_address] = POS_MAP[p.token_address] || []).push(p); });
+    const mx = ur.reduce((a, t) => (t.last_seen && (!a || new Date(t.last_seen) > new Date(a)) ? t.last_seen : a), null);
+    if (mx) LAST_SCAN = mx;
+    MAX_SIGNAL_AT = newMaxSigAt;
+    renderScanChips();
+
+    /* 3) Signals + symbols (hanya jika berubah atau cache miss) */
+    if (!SIGS.length || SIGS_CHAIN !== CUR || newMaxSigAt !== MAX_SIGNAL_AT) {
+      SIGS_CHAIN = CUR;
+      const [sr, su] = await Promise.allSettled([
+        q('signals', { select: 'token_address,chain,verdict,status,best_tp,tp1_at,tp2_at,tp3_at,signal_at,pnl_pct,time_to_tp1_h,prepared_data', ...ch, order: 'signal_at.desc', limit: '500' }),
+        q('dead_token_universe', { select: 'token_address,symbol,market_cap', ...ch, limit: '1000' })
+      ]);
+      const sigs = sr.status === 'fulfilled' ? sr.value : [];
+      SIGS = sigs;
+      sigs.forEach(s => {
+        const pd = s.prepared_data || {};
+        if ((pd.symbol || '').trim()) SYMBOL_MAP[s.token_address] = pd.symbol;
+      });
+      if (su.status === 'fulfilled') su.value.forEach(t => {
+        if (!SYMBOL_MAP[t.token_address] && t.symbol) SYMBOL_MAP[t.token_address] = t.symbol;
+        if (t.market_cap) SYM_MC[t.token_address] = t.market_cap;
+      });
+      /* token yang belum punya symbol → query per address */
+      const miss = [...new Set(sigs.map(s => s.token_address).filter(a => a && !SYMBOL_MAP[a]))];
+      if (miss.length) {
+        for (let i = 0; i < miss.length; i += 100) {
+          q('dead_token_universe', { select: 'token_address,symbol,market_cap', ...ch, token_address: `in.(${miss.slice(i, i + 100).join(',')})`, limit: '300' })
+            .then(r => r.forEach(t => { if (t.symbol) SYMBOL_MAP[t.token_address] = t.symbol; }))
+            .catch(() => {});
+        }
+      }
+      renderTrack();
+      cacheSave(); // simpan ke localStorage
+    }
+
+    const sig = dataSig();
+    if (sig === lastSig) return;
+    lastSig = sig;
+    refreshStats();
+    render();
+  }catch(e){
+    $('cards-wrap').innerHTML = '<div class="empty">⚠ ' + esc(e.message) + '</div>';
+  }
+}
+load(); setInterval(load, 120000);

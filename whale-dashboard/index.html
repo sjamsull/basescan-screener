@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DEAD WHALE — Detector Token Potensial</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet"></noscript>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="header">
+  <div class="brand">
+    <div class="logo">DEAD<em> WHALE</em><span class="cursor"></span></div>
+    <div class="brand-tag">Token Potensial</div>
+  </div>
+  <div class="header-right">
+    <span class="chip mode" id="mode-chip">MODE: BASE</span>
+    <span class="chip live"><i></i>LIVE</span>
+    <span class="chip" id="updated">Scan terakhir —</span>
+    <span class="chip" id="next">Scan berikutnya —</span>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- Chain switcher -->
+  <div class="command">
+    <div class="tabs" id="chain-tabs">
+      <button class="tab on" data-chain="base">BASE</button>
+      <button class="tab" data-chain="robinhood">ROBINHOOD</button>
+    </div>
+  </div>
+
+  <!-- Stat band -->
+  <div class="stat-band">
+    <div class="panel chart-panel">
+      <h3 class="chart-head">
+        <span>Whale Posisi &amp; Akumulasi</span>
+        <span class="chart-meta">
+          <b id="stat-token">0</b> token potensial ·
+          rata² akumulasi <b id="hero-avg">0</b>%
+        </span>
+      </h3>
+      <div class="bchart">
+        <div class="glines" id="glines"></div>
+        <div class="blar" id="blar-area"></div>
+      </div>
+      <div class="axis-row" id="axis-row"></div>
+      <div class="charts-legend" id="charts-legend"></div>
+    </div>
+  </div>
+
+  <!-- Track record (backtest) -->
+  <div class="panel track-panel" id="track-panel">
+    <div class="track-head">
+      <h3>Track Record <span class="mute" id="track-when"></span></h3>
+    </div>
+    <div class="track-cols">
+      <div class="track-cell" onclick="openTrackPage('tp1')" title="Lihat token yang kena TP1"><b id="t-tp1">—</b><span>hit rate TP1 ›</span></div>
+      <div class="track-cell" onclick="openTrackPage('inv')" title="Lihat token yang invalid"><b id="t-inv">—</b><span>invalidasi ›</span></div>
+      <div class="track-cell" onclick="openTrackPage('tt1')" title="Waktu tempuh ke TP1"><b id="t-tt1">—</b><span>waktu ke TP1 ›</span></div>
+      <div class="track-cell" onclick="openTrackPage('eval')" title="Semua sinyal dievaluasi"><b id="t-eval">—</b><span>sinyal dievaluasi ›</span></div>
+      <div class="track-cell" onclick="openTrackPage('pantau')" title="Jam sinyal & jam hit per token"><b id="t-tp123">—</b><span>pantauan TP ›</span></div>
+      <div class="track-cell" onclick="openTrackPage('anom')" title="Anomali waktu ke TP1"><b id="t-anom">—</b><span>anomali TT1 ›</span></div>
+    </div>
+  </div>
+
+  <!-- Search + sort -->
+  <div class="command">
+    <input class="search" id="search" type="text" placeholder="⌕ cari symbol / address / wallet…">
+    <select class="search" id="sort">
+      <option value="rho">SORT: RATIO WHALE/MCAP ↓</option>
+      <option value="whales">SORT: WHALE POSITIONS ↓</option>
+      <option value="accum">SORT: AKUMULASI USD ↓</option>
+      <option value="mcap">SORT: MCAP ↓</option>
+      <option value="momentum">SORT: MOMENTUM 1H ↓</option>
+      <option value="vol">SORT: VOL 24H ↓</option>
+      <option value="holders">SORT: HOLDERS ↓</option>
+      <option value="last">SORT: LAST SEEN ↓</option>
+      <option value="strong">SORT: STRONG ACCUMULATION</option>
+      <option value="neutral">SORT: NEUTRAL</option>
+      <option value="distribution">SORT: DISTRIBUTION</option>
+      <option value="new">SORT: NEW</option>
+    </select>
+  </div>
+
+  <div class="view-title" id="view-title">› TOKEN POTENSIAL</div>
+  <div id="cards-wrap"><div class="empty">Memuat…</div></div>
+
+</div>
+
+<!-- Modal -->
+<div class="overlay" id="overlay">
+  <div class="modal" id="modal"></div>
+</div>
+
+<footer>
+  BASE &amp; ROBINHOOD · Dead-Whale Radar v2 · scan tiap 6 jam via GitHub Actions
+  · <a href="https://github.com/sjamsull/basescan-screener" target="_blank">repo</a>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
