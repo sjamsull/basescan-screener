@@ -484,8 +484,10 @@ async function openToken(addr){
             if (ll.classification) h += row('Liquidity lock', esc(String(ll.classification)), String(ll.classification).startsWith('locked') ? 'ok' : 'warn');
             if (ll.topLpHolderLabel) h += row('Top LP holder', esc(ll.topLpHolderLabel), String(ll.topLpHolderLabel).toLowerCase().includes('locker') ? 'ok' : 'warn');
             const hd = v.holders || {};
-            if (hd.top10Percent != null) h += row('Top10 holders', hd.top10Percent.toFixed(1) + '%', hd.top10Percent > 50 ? 'warn' : hd.top10Percent > 30 ? 'warn' : 'ok');
-            if (hd.topHolderPercent != null) h += row('Top holder', hd.topHolderPercent.toFixed(1) + '%', hd.topHolderPercent > 20 ? 'warn' : 'ok');
+            const top10Val = Number(hd.top10Percent);
+            const topHoldVal = Number(hd.topHolderPercent);
+            if (isFinite(top10Val) && top10Val > 0) h += row('Top10 holders', top10Val.toFixed(1) + '%', top10Val > 50 ? 'warn' : top10Val > 30 ? 'warn' : 'ok');
+            if (isFinite(topHoldVal) && topHoldVal > 0) h += row('Top holder', topHoldVal.toFixed(1) + '%', topHoldVal > 20 ? 'warn' : 'ok');
             if (hd.totalHoldersCount && hd.totalHoldersCount.known) h += row('Holders', fmt(hd.totalHoldersCount.value, 0));
             const dp = v.deployer || {};
             if (dp.rapidDeploymentDetected === true) h += row('Rapid deploy', '<span class="bad">5+ kontrak/24h ⛔</span>', 'warn');
