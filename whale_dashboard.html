@@ -454,6 +454,10 @@
       <option value="vol">SORT: VOL 24H ↓</option>
       <option value="holders">SORT: HOLDERS ↓</option>
       <option value="last">SORT: LAST SEEN ↓</option>
+      <option value="strong">SORT: STRONG ACCUMULATION</option>
+      <option value="neutral">SORT: NEUTRAL</option>
+      <option value="distribution">SORT: DISTRIBUTION</option>
+      <option value="new">SORT: NEW</option>
     </select>
   </div>
 
@@ -744,6 +748,17 @@ function renderTokens(list){
 }
 
 /* ── filter + sort ── */
+/* verdict map per token (dari signals) untuk sort acumulation/neutral/distribution/new */
+const VERDICT_MAP = (() => {
+  const m = {};
+  (SIGS || []).forEach(s => { if (s.verdict && s.token_address) m[s.token_address] = s.verdict; });
+  return m;
+})();
+const SIG_AT = (() => {
+  const m = {};
+  (SIGS || []).forEach(s => { if (s.signal_at && s.token_address) m[s.token_address] = s.signal_at; });
+  return m;
+})();
 function filtered(){
   const ql = state.q.toLowerCase();
   let list = DATA_U;
@@ -762,7 +777,23 @@ function filtered(){
     vol:     (a,b) => (Number(b.volume_24h)||0) - (Number(a.volume_24h)||0),
     holders: (a,b) => (Number(b.holders)||0) - (Number(a.holders)||0),
     last:    (a,b) => (b.last_seen||'').localeCompare(a.last_seen||''),
+    strong:  (a,b) => (verdictRank(VERDICT_MAP[b.token_address]) - verdictRank(VERDICT_MAP[a.token_address])),
+    neutral: (a,b) => (verdictRankNeutral(VERDICT_MAP[b.token_address]) - verdictRankNeutral(VERDICT_MAP[a.token_address])),
+    distribution: (a,b) => (verdictRankDist(VERDICT_MAP[b.token_address]) - verdictRankDist(VERDICT_MAP[a.token_address])),
+    new:     (a,b) => (SIG_AT[a.token_address]||'').localeCompare(SIG_AT[b.token_address]||''),
   };
+  const verdictRank = (v) => {
+    switch (v) {
+      case 'STRONG BUY': return 5;
+      case 'BUY': return 4;
+      case 'NEUTRAL': return 3;
+      case 'CAUTION': return 2;
+      case 'DUMPED': return 1;
+      default: return 0;
+    }
+  };
+  const verdictRankNeutral = (v) => (v === 'NEUTRAL' ? 1 : 0);
+  const verdictRankDist = (v) => ((v === 'CAUTION' || v === 'DUMPED') ? 1 : 0);
   const whaleRatio = t => {
     const acc = tokenStats(t.token_address).accum;
     return t.market_cap ? acc / t.market_cap : 0;
