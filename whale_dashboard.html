@@ -450,6 +450,7 @@
       <option value="whales">SORT: WHALE POSITIONS ↓</option>
       <option value="accum">SORT: AKUMULASI USD ↓</option>
       <option value="mcap">SORT: MCAP ↓</option>
+      <option value="momentum">SORT: MOMENTUM 1H ↓</option>
       <option value="vol">SORT: VOL 24H ↓</option>
       <option value="holders">SORT: HOLDERS ↓</option>
       <option value="last">SORT: LAST SEEN ↓</option>
@@ -665,6 +666,14 @@ const walletTier = (usd) => {
   if (v >= 100) return { label: 'CRAB', cls: 'r-neutral' };
   return { label: 'PLANKTON', cls: '' };
 };
+/* Momentum proxy dari GMGN price historis: {1h,6h,24h} percent */
+const parsePC = (t) => {
+  if (!t || !t.price_change_json) return null;
+  try { return JSON.parse(t.price_change_json); } catch(e) { return null; }
+};
+const momentumCls = (v) => v == null ? '' : v > 0 ? 'ok' : v < 0 ? 'bad' : '';
+const momentumArrow = (v) => v == null ? '' : v > 0 ? '▲' : v < 0 ? '▼' : '–';
+const momentumCell = (v) => { if (v == null) return '—'; return `<span class="${momentumCls(v)}">${momentumArrow(v)} ${v.toFixed(2)}%</span>`; };
 function secChips(sec){
   if (!sec) return '<span class="sig" title="data keamanan belum di-scan">SEC —</span>';
   const c = [];
@@ -721,6 +730,7 @@ function renderTokens(list){
         <span class="sig info">◈ ${CUR==='robinhood'?'ROBINHOOD':'BASE'}</span>
         ${topTier}
         <span class="sig" title="Umur token sejak deploy">🕓 ${ageStr(t.created_at)}</span>
+        ${(() => { const pc = parsePC(t); if (!pc) return ''; const v = pc['1h']; return `<span class="sig ${momentumCls(v)}" title="Momentum 1h dari GMGN price historis">${momentumArrow(v)} ${v==null?'—':v.toFixed(1)+'%'} 1h</span>`; })()}
         <a class="sig info" href="${gmgn(t.token_address)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">gmgn ↗</a>
         ${risk}
       </div>
@@ -748,6 +758,7 @@ function filtered(){
     whales:  (a,b) => tokenStats(b.token_address).pos.length - tokenStats(a.token_address).pos.length,
     accum:   (a,b) => tokenStats(b.token_address).accum - tokenStats(a.token_address).accum,
     mcap:    (a,b) => (Number(b.market_cap)||0) - (Number(a.market_cap)||0),
+    momentum: (a,b) => (Number(parsePC(b)['1h'])||0) - (Number(parsePC(a)['1h'])||0),
     vol:     (a,b) => (Number(b.volume_24h)||0) - (Number(a.volume_24h)||0),
     holders: (a,b) => (Number(b.holders)||0) - (Number(a.holders)||0),
     last:    (a,b) => (b.last_seen||'').localeCompare(a.last_seen||''),
@@ -860,6 +871,8 @@ async function openToken(addr){
           <div class="gline"><span class="k">Volume 24h</span><b class="v">${fmtUsd(u.volume_24h)}</b></div>
           <div class="gline"><span class="k">Holders</span><b class="v">${fmt(u.holders,0)}</b></div>
           <div class="gline"><span class="k">Chain</span><b class="v">${CUR==='robinhood'?'ROBINHOOD':'BASE'}</b></div>
+          <div class="gline"><span class="k">Momentum 1h</span><b class="v">${momentumCell((parsePC(u)||{})['1h'])}</b></div>
+          <div class="gline"><span class="k">Momentum 24h</span><b class="v">${momentumCell((parsePC(u)||{})['24h'])}</b></div>
           ${u.risk_flags ? `<div class="gline"><span class="k">Risk</span><b class="v warn">${esc(u.risk_flags)}</b></div>` : ''}
         </div>
         <div class="msec">

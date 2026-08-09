@@ -143,6 +143,10 @@ class GMGNClient:
         buys = int(price.get("buys_24h") if isinstance(price, dict) else 0)
         sells = int(price.get("sells_24h") if isinstance(price, dict) else 0)
         swaps = buys + sells
+        # Harga historis untuk hitung momentum (price change proxy)
+        p1h = to_float(price.get("price_1h") if isinstance(price, dict) else 0, 0.0)
+        p6h = to_float(price.get("price_6h") if isinstance(price, dict) else 0, 0.0)
+        p24h = to_float(price.get("price_24h") if isinstance(price, dict) else 0, 0.0)
         return {
             "name": d.get("name"),
             "symbol": d.get("symbol"),
@@ -151,6 +155,9 @@ class GMGNClient:
             "liquidity": to_float(d.get("liquidity"), 0.0),
             "market_cap": mcap,
             "price_usd": pv,
+            "price_1h": p1h,
+            "price_6h": p6h,
+            "price_24h": p24h,
             "volume_24h": to_float(price.get("volume_24h") if isinstance(price, dict) else 0, 0.0),
             "buys": buys,
             "sells": sells,
