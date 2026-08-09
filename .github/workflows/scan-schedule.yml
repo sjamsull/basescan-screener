@@ -43,7 +43,7 @@ jobs:
         run: |
           python -m collector.main --chains ${{ matrix.chain }} --limit 50
 
-      - name: Backfill universe enrich (security + created_at)
+      - name: Backfill universe enrich (security + created_at + symbol)
         env:
           GMGN_API_KEY: ${{ secrets.GMGN_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

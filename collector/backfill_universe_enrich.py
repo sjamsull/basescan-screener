@@ -36,7 +36,7 @@ def main() -> int:
         offset = 0
         while True:
             q = (store.client.table("dead_token_universe")
-                 .select("token_address,security_json,created_at")
+                 .select("token_address,security_json,created_at,symbol")
                  .eq("chain", ch).range(offset, offset + 999))
             resp = q.execute()
             batch = resp.data or []
@@ -46,8 +46,8 @@ def main() -> int:
             offset += 100
             if offset > 20000:
                 break
-        # hanya yang belum punya security_json ATAU created_at
-        need = [r for r in rows if not r.get("security_json") or not r.get("created_at")]
+        # yang belum punya security_json ATAU created_at ATAU symbol
+        need = [r for r in rows if not r.get("security_json") or not r.get("created_at") or not r.get("symbol")]
         logger.info("%s: %d token, %d perlu enrich", ch, len(rows), len(need))
         if ch not in clients:
             clients[ch] = GMGNClient(ch)
@@ -69,6 +69,8 @@ def main() -> int:
                     ts = int(info.get("creation_timestamp") or 0)
                     if ts > 0:
                         rec["created_at"] = datetime.fromtimestamp(ts, timezone.utc).isoformat()
+                    if info.get("symbol"):
+                        rec["symbol"] = info["symbol"]
             except Exception as exc:
                 logger.debug("info %s: %s", addr[:10], exc)
             if not rec:
