@@ -28,7 +28,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
-          python -m collector.main --limit 50
+          python -m collector.main --chains base robinhood --limit 50
 
       - name: Backtest tracker (follow active signals)
         env:
