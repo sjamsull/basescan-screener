@@ -16,10 +16,11 @@ jobs:
             gmgn_key: GMGN_API_KEY_BASE
           - chain: robinhood
             gmgn_key: GMGN_API_KEY_ROBINHOOD
-          - chain: bsc
-            gmgn_key: GMGN_API_KEY_BSC
-          - chain: sol
-            gmgn_key: GMGN_API_KEY_SOL
+          # Aktifkan di bawah ini bila sudah siap scan 4 chain:
+          # - chain: bsc
+          #   gmgn_key: GMGN_API_KEY_BSC
+          # - chain: sol
+          #   gmgn_key: GMGN_API_KEY_SOL
     steps:
       - uses: actions/checkout@v4
 
