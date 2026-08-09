@@ -655,6 +655,16 @@ function verrowChip(t){
   return `<span class="sig ${vLevel(v.risk_level)}" title="${esc((v.critical||[]).join(' · ') || 'VERROW risk report')}">VR ${(v.risk_score ?? '—')} ${vText(v.risk_level)}</span>`;
 }
 const pct = v => { const x = Number(v) || 0; return x > 1 ? x : x * 100; };
+/* Wallet tier hierarchy untuk token meme (berdasarkan total buy_usd) */
+const walletTier = (usd) => {
+  const v = Number(usd) || 0;
+  if (v >= 50000) return { label: 'WHALE', cls: 'r-strong' };
+  if (v >= 10000) return { label: 'SHARK', cls: 'r-buy' };
+  if (v >= 5000) return { label: 'DOLPHIN', cls: 'r-buy' };
+  if (v >= 1000) return { label: 'FISH', cls: 'r-neutral' };
+  if (v >= 100) return { label: 'CRAB', cls: 'r-neutral' };
+  return { label: 'PLANKTON', cls: '' };
+};
 function secChips(sec){
   if (!sec) return '<span class="sig" title="data keamanan belum di-scan">SEC —</span>';
   const c = [];
@@ -684,6 +694,13 @@ function renderTokens(list){
     const ts = tokenStats(t.token_address);
     const risk = t.risk_flags ? `<span class="sig warn" title="${esc(t.risk_flags)}">⚠ ${esc(t.risk_flags.split(',').slice(0,2).join(','))}</span>` : '';
     const lastSeen = Math.round((Date.now() - new Date(t.last_seen).getTime()) / 86400000);
+    const topTier = (() => {
+      const pos = ts.pos || [];
+      if (!pos.length) return '';
+      const maxB = Math.max(...pos.map(p => Number(p.buy_usd)||0));
+      const t = walletTier(maxB);
+      return `<span class="sig ${t.cls}" title="Tertinggi whale di token ini">TOP ${t.label}</span>`;
+    })();
     return `
     <div class="card in" data-idx="${i}" onclick="openToken('${t.token_address}')">
       <div class="card-top">
@@ -702,6 +719,7 @@ function renderTokens(list){
       </div>
       <div class="signal-row">
         <span class="sig info">◈ ${CUR==='robinhood'?'ROBINHOOD':'BASE'}</span>
+        ${topTier}
         <span class="sig" title="Umur token sejak deploy">🕓 ${ageStr(t.created_at)}</span>
         <a class="sig info" href="${gmgn(t.token_address)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">gmgn ↗</a>
         ${risk}
@@ -826,9 +844,9 @@ async function openToken(addr){
     const u = uni[0] || {};
     const posHtml = pos.length ? `
       <table class="mtable">
-        <thead><tr><th>Wallet</th><th>Status</th><th class="num">Buy</th><th class="num">Sell</th><th class="num">USD</th><th class="num">Hold</th><th>Arkham</th></tr></thead>
+        <thead><tr><th>Wallet</th><th>Tier</th><th>Status</th><th class="num">Buy</th><th class="num">Sell</th><th class="num">USD</th><th class="num">Hold</th><th>Arkham</th></tr></thead>
         <tbody>${pos.map(p => `
-          <tr><td>${short(p.wallet)}</td><td><span class="rating ${(STATUS_META[p.status]||STATUS_META.WATCH).cls}" style="padding:2px 7px">${p.status||'WATCH'}</span></td>
+          <tr><td>${short(p.wallet)}</td><td><span class="rating ${walletTier(p.buy_usd).cls}" style="padding:2px 7px">${walletTier(p.buy_usd).label}</span></td><td><span class="rating ${(STATUS_META[p.status]||STATUS_META.WATCH).cls}" style="padding:2px 7px">${p.status||'WATCH'}</span></td>
           <td class="num">${fmt(p.buy_count,0)}</td><td class="num">${fmt(p.sell_count,0)}</td>
           <td class="num ok">${fmtUsd(p.buy_usd)}</td><td class="num">${fmt(p.hold_days,1)}d</td>
           <td><a class="sig info" style="padding:2px 6px" href="${arkm(p.wallet)}" target="_blank">ark ↗</a></td></tr>`).join('')}</tbody>

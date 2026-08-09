@@ -99,6 +99,12 @@ DW_LOOKBACK_DAYS = int(os.getenv("DW_LOOKBACK_DAYS", "30"))                     
 DW_HOLD_MIN_DAYS = int(os.getenv("DW_HOLD_MIN_DAYS", "3"))                  # hold >= 3 hari = confirm
 DW_SCAN_LIMIT = int(os.getenv("DW_SCAN_LIMIT", "50"))                       # token per run
 
+# ==== WALLET TIER (hierarchy buy_usd) untuk token meme ====
+# Klasifikasi wallet berdasarkan total buy_usd di whale_positions.
+WALLET_TIER_SHARK_MIN = float(os.getenv("WALLET_TIER_SHARK_MIN", "10000"))
+WALLET_TIER_DOLPHIN_MIN = float(os.getenv("WALLET_TIER_DOLPHIN_MIN", "5000"))
+WALLET_TIER_FISH_MIN = float(os.getenv("WALLET_TIER_FISH_MIN", "1000"))
+WALLET_TIER_CRAB_MIN = float(os.getenv("WALLET_TIER_CRAB_MIN", "100"))
 # ==== FILTER UNIVERSE: buang token non-meme & scam dari screening ====
 # Simbol/pattern yang dikecualikan (uppercase). Default: stablecoin, wrapped/liquid
 # staking, dan token "tetangga" BTC/ETH/USD besar yang bukan meme.
