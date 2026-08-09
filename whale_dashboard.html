@@ -988,10 +988,15 @@ function closeModal(){ $('overlay').classList.remove('open'); }
 
 /* ── chain / events ── */
 function setChain(name){
+  if (CUR === name) return;
   CUR = name;
   document.querySelectorAll('#chain-tabs .tab').forEach(b => b.classList.toggle('on', b.dataset.chain === name));
   $('mode-chip').textContent = 'MODE: ' + (name==='robinhood' ? 'ROBINHOOD' : 'BASE');
-  load();
+  cacheLoad(); // pakai cache dulu → render cepat, load() akan fetch jika ada perubahan
+  renderScanChips();
+  refreshStats();
+  render();
+  load(); // cek perubahan di background
 }
 document.querySelectorAll('#chain-tabs .tab').forEach(b => b.onclick = () => setChain(b.dataset.chain));
 $('search').addEventListener('input', debounce(e => { state.q = e.target.value; render(); }, 150));
@@ -1001,9 +1006,35 @@ window.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); 
 
 let lastSig = '';
 let TRACK = null; // tak terpakai lagi: metrik dihitung dari SIGS per chain
-let LAST_SCAN = null;
+let LAST_SCAN = null, MAX_SIGNAL_AT = null;
 let SIGS = [], SYMBOL_MAP = {}, SYM_MC = {}, SIGS_CHAIN = null;
 const SCAN_INTERVAL_H = 6; // cron: 0 */6 * * *
+
+/* ── localStorage cache: percepat load & chain-switch ── */
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 menit
+function cacheKey(){ return 'bscan_' + CUR; }
+function cacheSave(){
+  try {
+    localStorage.setItem(cacheKey(), JSON.stringify({
+      SIGS, SYM_MC, SYMBOL_MAP, LAST_SCAN, MAX_SIGNAL_AT, ts: Date.now(),
+    }));
+  } catch (e) {}
+}
+function cacheLoad(){
+  try {
+    const d = JSON.parse(localStorage.getItem(cacheKey()));
+    if (!d || !d.ts) return null;
+    if (Date.now() - d.ts > CACHE_TTL_MS) return null; // expired
+    SIGS = d.SIGS || [];
+    SYM_MC = d.SYM_MC || {};
+    SYMBOL_MAP = d.SYMBOL_MAP || {};
+    LAST_SCAN = d.LAST_SCAN || null;
+    MAX_SIGNAL_AT = d.maxSignalAt || null;
+    return d;
+  } catch (e) { return null; }
+}
+function cacheClear(){ try { localStorage.removeItem(cacheKey()); } catch (e) {} }
+
 function dataSig() {
   return (CUR + '|' + DATA_U.length + '|' + DATA_U.map(t => t.token_address).join(','));
 }
@@ -1175,6 +1206,24 @@ const mcNow = (s) => {
 async function load(){
   try{
     const ch = { chain: `eq.${CUR}` };
+
+    /* 1) Cek perubahan ringan dulu (2 request kecil) */
+    const [probeU, probeS] = await Promise.allSettled([
+      q('dead_token_universe', {select: 'last_seen', ...ch, order: 'last_seen.desc', limit: '1'}),
+      q('signals', {select: 'signal_at', ...ch, order: 'signal_at.desc', limit: '1'})
+    ]);
+    const newLastSeen = probeU.status === 'fulfilled' ? (probeU.value[0]?.last_seen || null) : null;
+    const newMaxSigAt = probeS.status === 'fulfilled' ? (probeS.value[0]?.signal_at || null) : null;
+
+    /* Tidak ada data baru + cache valid → pakai cache, skip heavy fetch */
+    if (newLastSeen === LAST_SCAN && newMaxSigAt === MAX_SIGNAL_AT && SIGS.length) {
+      renderScanChips();
+      refreshStats();
+      render();
+      return;
+    }
+
+    /* 2) Ada perubahan — fetch data lengkap */
     const [u,w] = await Promise.allSettled([
       q('dead_token_universe', {...ch, order: 'last_seen.desc', limit: '150'}),
       q('whale_positions', {...ch, order: 'buy_usd.desc', limit: '200'})
@@ -1186,41 +1235,41 @@ async function load(){
     DATA_U = ur;
     POS_MAP = {};
     wr.forEach(p => { (POS_MAP[p.token_address] = POS_MAP[p.token_address] || []).push(p); });
-    /* waktu scan statis = last_seen tertinggi (terbesar) dari universe chain ini */
     const mx = ur.reduce((a, t) => (t.last_seen && (!a || new Date(t.last_seen) > new Date(a)) ? t.last_seen : a), null);
     if (mx) LAST_SCAN = mx;
+    MAX_SIGNAL_AT = newMaxSigAt;
     renderScanChips();
-    if (!SIGS.length || SIGS_CHAIN !== CUR) {
+
+    /* 3) Signals + symbols (hanya jika berubah atau cache miss) */
+    if (!SIGS.length || SIGS_CHAIN !== CUR || newMaxSigAt !== MAX_SIGNAL_AT) {
       SIGS_CHAIN = CUR;
-      Promise.allSettled([
-        q('signals', { select: 'token_address,chain,verdict,status,best_tp,tp1_at,tp2_at,tp3_at,signal_at,pnl_pct,time_to_tp1_h,prepared_data', chain: `eq.${CUR}`, order: 'signal_at.desc', limit: '500' }),
-        q('dead_token_universe', { select: 'token_address,symbol,market_cap', chain: `eq.${CUR}`, limit: '1000' })
-      ]).then(([sr, su]) => {
-        const sigs = sr.status === 'fulfilled' ? sr.value : [];
-        SIGS = sigs;
-        /* symbol utama dari signals.prepared_data.symbol (backfill sudah diisi) */
-        sigs.forEach(s => {
-          const pd = s.prepared_data || {};
-          if ((pd.symbol || '').trim()) SYMBOL_MAP[s.token_address] = pd.symbol;
-        });
-        if (su.status === 'fulfilled') su.value.forEach(t => {
-          if (!SYMBOL_MAP[t.token_address] && t.symbol) SYMBOL_MAP[t.token_address] = t.symbol;
-          if (t.market_cap) SYM_MC[t.token_address] = t.market_cap;
-        });
-        /* token sinyal yang belum ada symbol di universe → query per address langsung */
-        const miss = [...new Set(sigs.map(s => s.token_address).filter(a => a && !SYMBOL_MAP[a]))];
-        if (miss.length) {
-          for (let i = 0; i < miss.length; i += 100) {
-            q('dead_token_universe', { select: 'token_address,symbol,market_cap', chain: `eq.${CUR}`, token_address: `in.(${miss.slice(i, i + 100).join(',')})`, limit: '300' })
-              .then(r => r.forEach(t => {
-                if (t.symbol) SYMBOL_MAP[t.token_address] = t.symbol;
-              }))
-              .catch(() => {});
-          }
-        }
-        renderTrack();
+      const [sr, su] = await Promise.allSettled([
+        q('signals', { select: 'token_address,chain,verdict,status,best_tp,tp1_at,tp2_at,tp3_at,signal_at,pnl_pct,time_to_tp1_h,prepared_data', ...ch, order: 'signal_at.desc', limit: '500' }),
+        q('dead_token_universe', { select: 'token_address,symbol,market_cap', ...ch, limit: '1000' })
+      ]);
+      const sigs = sr.status === 'fulfilled' ? sr.value : [];
+      SIGS = sigs;
+      sigs.forEach(s => {
+        const pd = s.prepared_data || {};
+        if ((pd.symbol || '').trim()) SYMBOL_MAP[s.token_address] = pd.symbol;
       });
+      if (su.status === 'fulfilled') su.value.forEach(t => {
+        if (!SYMBOL_MAP[t.token_address] && t.symbol) SYMBOL_MAP[t.token_address] = t.symbol;
+        if (t.market_cap) SYM_MC[t.token_address] = t.market_cap;
+      });
+      /* token yang belum punya symbol → query per address */
+      const miss = [...new Set(sigs.map(s => s.token_address).filter(a => a && !SYMBOL_MAP[a]))];
+      if (miss.length) {
+        for (let i = 0; i < miss.length; i += 100) {
+          q('dead_token_universe', { select: 'token_address,symbol,market_cap', ...ch, token_address: `in.(${miss.slice(i, i + 100).join(',')})`, limit: '300' })
+            .then(r => r.forEach(t => { if (t.symbol) SYMBOL_MAP[t.token_address] = t.symbol; }))
+            .catch(() => {});
+        }
+      }
+      renderTrack();
+      cacheSave(); // simpan ke localStorage
     }
+
     const sig = dataSig();
     if (sig === lastSig) return;
     lastSig = sig;
@@ -1230,7 +1279,7 @@ async function load(){
     $('cards-wrap').innerHTML = '<div class="empty">⚠ ' + esc(e.message) + '</div>';
   }
 }
-load(); setInterval(load, 60000);
+load(); setInterval(load, 120000);
 </script>
 </body>
 </html>
