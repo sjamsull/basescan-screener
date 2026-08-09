@@ -32,6 +32,7 @@ const ageStr = (ts) => {
 const gmgn = (a) => a ? `https://gmgn.ai/${CUR==='robinhood'?'robinhood':'base'}/token/${a.toLowerCase()}` : "#";
 const gmgnChain = (s) => s && s.token_address ? `https://gmgn.ai/${s.chain==='robinhood'?'robinhood':'base'}/token/${s.token_address.toLowerCase()}` : "#";
 const chainlens = (a) => a ? `https://finland93.github.io/ChainLens/?token=${a.toLowerCase()}` : "#";
+const sharpeRug = (a) => a ? `https://www.sharpe.ai/rug-check?token=${a.toLowerCase()}&chain=1&scan=1` : "#";
 const arkm = (a) => a ? `https://arkm.com/explorer/address/${a}` : "#";
 
 /* ── ContractScan client-side untuk BASE (tanpa web3 lib, raw RPC) ── */
@@ -240,7 +241,7 @@ function renderTokens(list){
       <div class="card-top">
         <div class="rank">#${String(i+1).padStart(2,'0')}</div>
         <div class="sym-block">
-          <div class="sym">${esc(t.symbol||'—')} <a href="${gmgn(t.token_address)}" target="_blank" rel="noopener" title="Buka di GMGN" onclick="event.stopPropagation()">↗</a> <a href="${chainlens(t.token_address)}" target="_blank" rel="noopener" title="Buka di ChainLens" onclick="event.stopPropagation()">🔍</a></div>
+          <div class="sym">${esc(t.symbol||'—')} <a href="${gmgn(t.token_address)}" target="_blank" rel="noopener" title="Buka di GMGN" onclick="event.stopPropagation()">↗</a> <a href="${chainlens(t.token_address)}" target="_blank" rel="noopener" title="Buka di ChainLens" onclick="event.stopPropagation()">🔍</a>${CUR==='base' ? ` <a href="${sharpeRug(t.token_address)}" target="_blank" rel="noopener" title="Buka di Sharpe rug-check" onclick="event.stopPropagation()">🛡️</a>` : ''}</div>
           <div class="tname">${short(t.token_address)}</div>
         </div>
         <span class="rating ${ts.pos.length ? 'r-buy' : 'r-neutral'}">${ts.pos.length ? 'POTENSIAL' : 'KANDIDAT'}</span>
@@ -507,6 +508,7 @@ async function openToken(addr){
       <div class="signal-row" style="margin-top:16px">
         <a class="sig info" href="${gmgn(addr)}" target="_blank" rel="noopener">Buka di GMGN ↗</a>
         <a class="sig info" href="${chainlens(addr)}" target="_blank" rel="noopener">ChainLens 🔍</a>
+        ${CUR==='base' ? `<a class="sig info" href="${sharpeRug(addr)}" target="_blank" rel="noopener">Sharpe rug-check 🛡️</a>` : ''}
       </div>`;
   }catch(e){
     $('modal').innerHTML += '<div class="empty">⚠ ' + esc(e.message) + '</div>';
