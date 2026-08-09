@@ -17,10 +17,12 @@ class SecurityGate:
         if mode == "dead_whale":
             self.min_age_days = 4.0
             self.min_liq = config.MIN_LIQUIDITY_DEADWHALE
+            self.max_liq = float('inf')  # dead-whale tidak dibatasi max
             self.max_top10 = config.DEAD_MAX_TOP10_PCT
         else:
             self.min_age_days = config.MIN_AGE_DAYS
             self.min_liq = config.MIN_LIQUIDITY_ACCUMULATION
+            self.max_liq = config.MAX_LIQUIDITY_ACCUMULATION
             self.max_top10 = config.MAX_TOP10_PCT
 
     def check(self, token: Dict, pair: Optional[Dict]) -> Dict:
@@ -45,6 +47,8 @@ class SecurityGate:
         liq = liq or to_float(token.get("liquidity"), to_float(token.get("liquidity_usd"), 0.0))
         if liq < self.min_liq:
             reasons.append(f"liq<${self.min_liq}")
+        if liq > self.max_liq:
+            reasons.append(f"liq>${self.max_liq/1000:.0f}K")
 
         # 4. Top10 holder (GMGN)
         top10 = to_float(token.get("top_10_holder_rate"), to_float(token.get("top10_holder_rate"), 0.0)) * 100

@@ -35,10 +35,20 @@ class TestSecurityGate:
         assert r["passed"] is False
         assert "age" in r["reason"]
 
-    def test_liq_di_bawah_5k_reject(self):
-        r = SecurityGate().check(token(liquidity=2_000), None)
+    def test_liq_di_bawah_100k_reject(self):
+        r = SecurityGate().check(token(liquidity=50_000), None)
         assert r["passed"] is False
         assert "liq" in r["reason"]
+
+    def test_liq_di_atas_850k_reject(self):
+        # Token mayor (LINK/Chainlink liquidity ~$500M) harus ditolak
+        r = SecurityGate().check(token(liquidity=1_000_000), None)
+        assert r["passed"] is False
+        assert "liq>" in r["reason"]
+
+    def test_liq_dalam_range_pass(self):
+        r = SecurityGate().check(token(liquidity=250_000), None)
+        assert r["passed"] is True
 
     def test_top10_konsentrasi_reject(self):
         r = SecurityGate().check(token(top_10_holder_rate=0.90), None)
@@ -62,7 +72,7 @@ class TestSecurityGate:
         assert r["passed"] is True
 
     def test_liq_dual_source_pair(self):
-        r = SecurityGate().check(token(liquidity=0), {"liquidity_usd": 80_000})
+        r = SecurityGate().check(token(liquidity=0), {"liquidity_usd": 250_000})
         assert r["passed"] is True
 
 
