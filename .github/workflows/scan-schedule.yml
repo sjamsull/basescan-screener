@@ -43,6 +43,14 @@ jobs:
         run: |
           python -m collector.main --chains ${{ matrix.chain }} --limit 50
 
+      - name: Backfill universe enrich (security + created_at)
+        env:
+          GMGN_API_KEY: ${{ secrets.GMGN_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          python -m collector.backfill_universe_enrich
+
   backtest:
     needs: scan
     runs-on: ubuntu-latest

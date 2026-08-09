@@ -217,24 +217,16 @@ class UniversePopulator:
                     ).execute()
                     added += 1
                 else:
-                    flagged.append({"record": record, "flags": flags})
-            except Exception as exc:
-                logger.warning("populate %s: %s", addr, exc)
-        # Fallback: jika tidak ada token yang lolos GMGN gate, simpan token
-        # flagged (risky) supaya dashboard tetap punya data — diberi tanda risk_flags.
-        if added == 0 and flagged:
-            logger.warning("universe kosong dari token aman — simpan %d token flagged (risky)", len(flagged))
-            for item in flagged[: max(5, limit)]:
-                rec = dict(item["record"])
-                rec["risk_flags"] = ",".join(item["flags"])
-                try:
+                    # Token flagged (risky) tetap disimpan supaya dashboard punya
+                    # security/created_at — diberi tanda risk_flags.
+                    record["risk_flags"] = ",".join(flags)
                     self.store.client.table("dead_token_universe").upsert(
-                        {k: v for k, v in rec.items() if k != "id"},
+                        {k: v for k, v in record.items() if k != "id"},
                         on_conflict="token_address",
                     ).execute()
                     added += 1
-                except Exception as exc:
-                    logger.warning("populate flagged %s: %s", rec["token_address"], exc)
+            except Exception as exc:
+                logger.warning("populate %s: %s", addr, exc)
         logger.info("populate_universe %s: added=%d / seed=%d", self.chain, added, len(candidates))
         return added
 
