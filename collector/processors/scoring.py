@@ -112,6 +112,10 @@ class TokenScorer:
         }
 
     def calculate_momentum(self, token: Dict) -> tuple[float, Dict]:
+        # CATATAN SKALA: GMGN mengembalikan % change per-interval dalam satuan
+        # PERSEN kecil (median ~0%, p95 ~3%, ekstrem +-15%). Band di bawah
+        # dikalibrasi ke skala itu (bukan 5-120% seperti sebelumnya yang
+        # membuat semua token "flat" -> momentum macet di 50).
         score = 50.0
         kline = to_float(token.get("kline_trend_pct"), to_float(token.get("price_change_24h"), 0.0))
         vol_ratio = to_float(token.get("kline_vol_ratio"), 1.0)
@@ -119,15 +123,21 @@ class TokenScorer:
 
         detail = {"kline_24h": kline, "vol_ratio": vol_ratio, "price_1h": price_1h}
 
-        if 5 <= kline <= 120:
+        if kline >= 40.0:
+            score -= 12
+            detail["trend_band"] = "overheated"
+        elif kline >= 1.5:
             score += 20
             detail["trend_band"] = "healthy"
-        elif kline > 120:
-            score -= 15
-            detail["trend_band"] = "overheated"
-        elif kline < -20:
-            score -= 10
+        elif kline >= 0.5:
+            score += 8
+            detail["trend_band"] = "mild_up"
+        elif kline <= -4.0:
+            score -= 12
             detail["trend_band"] = "bleeding"
+        elif kline <= -1.5:
+            score -= 5
+            detail["trend_band"] = "weakening"
         else:
             detail["trend_band"] = "flat"
 
@@ -135,9 +145,9 @@ class TokenScorer:
             score += 8
             detail["volume_confirm"] = True
 
-        # Harga naik terlalu cepat tanpa volume = warning
-        if price_1h >= 20:
-            score -= 10
+        # Harga naik terlalu cepat (parabolic) tanpa dorongan organik = warning
+        if price_1h >= 6:
+            score -= 12
             detail["pump_warning"] = True
 
         return clamp(score), detail

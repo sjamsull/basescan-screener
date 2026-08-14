@@ -209,4 +209,18 @@ class GMGNClient:
             out["holder_count_trend"] = "neutral"
 
         out["price_change_1h"] = price_1h
+
+        # ==== Tren harga (PENTING: scorer membaca kline_trend_pct/price_change_24h
+        # untuk momentum — sebelumnya TIDAK pernah diisi sehingga momentum macet
+        # di 50 & fitur kline_trend mati). GMGN rank mengembalikan % change per
+        # interval (1h untuk accumulation, 24h untuk dead_whale) di
+        # price_change_percent, plus price_change_percent1h.
+        out["kline_trend_pct"] = to_float(
+            raw.get("price_change_percent1h"),
+            to_float(raw.get("price_change_percent"), 0.0),
+        )
+        out["price_change_24h"] = to_float(
+            raw.get("price_change_percent24h"),
+            to_float(raw.get("price_change_percent"), 0.0),
+        )
         return out
