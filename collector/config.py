@@ -36,6 +36,10 @@ for _cfg in CHAINS.values():
 
 DEFAULT_CHAIN = os.getenv("DEFAULT_CHAIN", "base")
 
+# Chain yang dipantau & di-evaluasi. Chain lain (sol/bsc/eth/...) diabaikan dari
+# tracking & metrik backtest (tetap tersimpan di DB, tidak dihapus).
+TRACK_CHAINS = [c.strip() for c in os.getenv("TRACK_CHAINS", "base,robinhood").split(",") if c.strip()]
+
 
 def chain_order() -> List[str]:
     order = os.getenv("CHAIN_WEIGHT_ORDER", "").strip()

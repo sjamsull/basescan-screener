@@ -23,6 +23,8 @@ from collector.scanners.gmgn import GMGNClient
 from collector.storage.supabase import SupabaseStorage
 from collector.utils.helpers import to_float
 
+TRACK_CHAINS = getattr(config, "TRACK_CHAINS", ["base", "robinhood"])
+
 logger = logging.getLogger(__name__)
 
 TRACK_WINDOW_DAYS = int(__import__("os").getenv("TRACK_WINDOW_DAYS", "30"))
@@ -48,12 +50,14 @@ class BacktestTracker:
         di-track sampai lewat TRACK_WINDOW_DAYS. Status tidak diubah di sini —
         evaluasi status tetap hanya untuk ACTIVE (lihat run())."""
         cutoff = datetime.now(timezone.utc) - timedelta(days=TRACK_WINDOW_DAYS)
-        resp = (
+        q = (
             self.storage.client.table("signals")
             .select("*")
             .gt("signal_at", cutoff.isoformat())
-            .execute()
         )
+        if TRACK_CHAINS:
+            q = q.in_("chain", TRACK_CHAINS)
+        resp = q.execute()
         return resp.data or []
 
     def tracks(self, address: str) -> List[Dict]:
@@ -386,12 +390,14 @@ class BacktestTracker:
         palsu akibat baseline track-pertama). Tidak menambah track baru; hanya
         mengulang simulasi dari riwayat track yang ada.
         """
-        resp = (
+        q = (
             self.storage.client.table("signals")
             .select("*")
             .order("signal_at", desc=True)
-            .execute()
         )
+        if TRACK_CHAINS:
+            q = q.in_("chain", TRACK_CHAINS)
+        resp = q.execute()
         all_rows = resp.data or []
         if limit:
             all_rows = all_rows[:limit]
@@ -496,9 +502,12 @@ class BacktestTracker:
 
     def aggregate_metrics(self) -> Dict:
         """Metrik agregat dari signals yang sudah diverifikasi tracker (honest stats)."""
-        rows = self.storage.client.table("signals").select(
+        q = self.storage.client.table("signals").select(
             "token_address,chain,verdict,best_tp,tp1_at,tp2_at,tp3_at,signal_at,pnl_pct,status,time_to_tp1_h"
-        ).execute().data or []
+        )
+        if TRACK_CHAINS:
+            q = q.in_("chain", TRACK_CHAINS)
+        rows = q.execute().data or []
 
         # hanya sinyal dengan plan (punya tp_ladder) & data tracker
         valuable = [r for r in rows
