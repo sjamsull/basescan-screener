@@ -61,22 +61,29 @@ def main() -> int:
         logger.error("backtest check: %s", exc)
         ok = False
 
-    # 3. Universe freshness per chain
+    # 3. Dead-whale pipeline freshness per chain (via heartbeat di scans).
+    #    dead_token_universe.last_seen hanya maju saat ada token mati BARU
+    #    ditemukan; di pasar sepi ini normal tidak bergerak, sehingga kita
+    #    ukur "apakah pipeline populate_universe/dead_whale masih jalan" bukan
+    #    "apakah token baru ditemukan".
     for chain in ["base", "robinhood"]:
         try:
-            u = store.client.table("dead_token_universe").select("last_seen").eq("chain", chain).order("last_seen", desc=True).limit(1).execute()
-            if u.data:
-                ts = u.data[0]["last_seen"]
+            s = (store.client.table("scans")
+                 .select("scanned_at,mode,chain")
+                 .eq("mode", "dead_whale").eq("chain", chain)
+                 .order("scanned_at", desc=True).limit(1).execute())
+            if s.data:
+                ts = s.data[0]["scanned_at"]
                 age = now - datetime.fromisoformat(ts.replace("Z", "+00:00"))
-                status = "OK" if age < timedelta(hours=7) else "STALE"
+                status = "OK" if age < timedelta(hours=8) else "STALE"
                 if status == "STALE":
                     ok = False
-                logger.info("universe %s: last_seen=%s age=%s [%s]", chain, ts[:19], age, status)
+                logger.info("dead_whale %s: last=%s age=%s [%s]", chain, ts[:19], age, status)
             else:
-                logger.warning("universe %s: KOSONG", chain)
+                logger.warning("dead_whale %s: BELUM ADA scan", chain)
                 ok = False
         except Exception as exc:
-            logger.error("universe %s: %s", chain, exc)
+            logger.error("dead_whale %s: %s", chain, exc)
             ok = False
 
     # 4. Signal_tracks cleanup (opsional)

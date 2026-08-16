@@ -227,6 +227,18 @@ class UniversePopulator:
                     added += 1
             except Exception as exc:
                 logger.warning("populate %s: %s", addr, exc)
+        # Heartbeat: catat bahwa pipeline dead-whale masih jalan, terlepas dari
+        # apakah ada token mati baru ditemukan. Ini agar health_monitor tidak
+        # false-alarm STALE saat pasar base sedang sepi (0 token lolos gate).
+        try:
+            self.store.client.table("scans").insert({
+                "scanned_at": now.isoformat(),
+                "mode": "dead_whale",
+                "chain": self.chain,
+            }).execute()
+        except Exception as exc:
+            logger.warning("heartbeat scans insert: %s", exc)
+
         logger.info("populate_universe %s: added=%d / seed=%d", self.chain, added, len(candidates))
         return added
 
