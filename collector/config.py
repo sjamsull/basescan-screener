@@ -54,7 +54,7 @@ MAX_TOP10_PCT = float(os.getenv("MAX_TOP10_PCT", "65.0"))
 MAX_TAX_PCT = float(os.getenv("MAX_TAX_PCT", "10.0"))
 MIN_FEE_MC_RATIO = float(os.getenv("MIN_FEE_MC_RATIO", "1e-5"))
 
-MIN_LIQUIDITY_ACCUMULATION = int(os.getenv("MIN_LIQUIDITY_ACCUMULATION", "100000"))  # $100K min
+MIN_LIQUIDITY_ACCUMULATION = int(os.getenv("MIN_LIQUIDITY_ACCUMULATION", "35000"))  # $35K min — mikro-meme early accumulation (termasuk tier ~$45K spt luminous)
 MAX_LIQUIDITY_ACCUMULATION = int(os.getenv("MAX_LIQUIDITY_ACCUMULATION", "850000"))  # $850K max = filter token mayor
 MIN_LIQUIDITY_DEADWHALE = int(os.getenv("MIN_LIQUIDITY_DEADWHALE", "1000"))
 
